@@ -1,0 +1,71 @@
+/*
+* [nfs2se 0004] Raytraced render target pixels: the motion of the PICTURE.  (A new file of the nfs2se patch set; the license of the tree applies.)
+*
+* A pixel whose primary ray hit a screen (a surface that shows a raytraced render target) continues as a ray out of the render target camera.  Remix then
+* computes the motion vector of that pixel for a point on the MAIN camera's ray at the accumulated distance (TODO[REMIX-3500] in geometry_resolver.slangh) and,
+* for DLSS-RR, takes depth, normal and motion from the screen itself (a screen glued to the camera has no motion at all).  Neither is the motion of what
+* the pixel shows, so a moving picture smears.
+*
+* The motion of what it shows: the surface point P that the redirected ray hit (and, if the surface moves, where it was one frame ago) seen by the render
+* target camera now and one frame ago gives two places in the render target.  The screen maps the render target linearly onto a rectangle of the main picture
+* (rtx.raytracedRenderTarget.screenRect: valid for a screen that is fixed on the screen, i.e. glued to the camera), so the difference of the two places, scaled
+* by the rectangle, is the motion of the pixel in the main picture.  It is returned as the virtual motion Remix's own code expects (previous minus current virtual
+* hit position), so that every consumer (the screen space motion, the virtual motion of ReSTIR and NRD, the DLSS-RR guide) agrees: the previous virtual hit
+* position is the point of the previous camera's ray through the pixel's previous place, as far from the camera as the virtual hit is now.
+*
+* Pure (no constant buffer): the arguments carry everything, so tools/emitter-proof/mirror/ compiles this very text to C++ and checks it against a ground truth.
+*/
+#pragma once
+
+#include "rtx/concept/camera/camera.slangh"
+
+// The rectangle is given when it has an area (the default, all zeros, keeps Remix's behaviour).  screenRect = (x0, y0, x1, y1): the screen UV (0 to 1, top left
+// origin, fractions of the main picture) of the render target's UV (0, 0) and of its UV (1, 1); x0 > x1 is a mirror image.
+bool renderTargetScreenRectIsGiven(vec4 screenRect)
+{
+  return screenRect.x != screenRect.z && screenRect.y != screenRect.w;
+}
+
+// Returns the virtual motion (previous minus current virtual hit position) of the pixel, or defaultVirtualMotion if the rectangle is not given or the hit point
+// is not in front of the render target camera now or a frame ago.
+//   mainCamera, renderTargetCamera  the cameras of the frame (the render target camera's matrices are unjittered here, like the ray the screen redirects)
+//   pixelCoordinate                 the pixel of the main picture
+//   virtualHitDistance              the distance accumulated along the pixel's main camera ray (the screen's plus the redirected ray's)
+//   hitPosition, hitMotion          the surface point the redirected ray hit and its motion (previous minus current position)
+vec3 calcRenderTargetVirtualMotion(
+  Camera mainCamera, Camera renderTargetCamera, vec4 screenRect,
+  uvec2 pixelCoordinate, float virtualHitDistance, vec3 hitPosition, vec3 hitMotion, vec3 defaultVirtualMotion)
+{
+  if (!renderTargetScreenRectIsGiven(screenRect))
+  {
+    return defaultVirtualMotion;
+  }
+
+  // The hit point in the render target camera's picture now and one frame ago
+  const vec4 clipNow = mul(renderTargetCamera.viewToProjection, mul(renderTargetCamera.worldToView, vec4(hitPosition, 1.0f)));
+  const vec4 clipPrev = mul(renderTargetCamera.prevWorldToProjection, vec4(hitPosition + hitMotion, 1.0f));
+
+  if (!(clipNow.w > 0.0f) || !(clipPrev.w > 0.0f))
+  {
+    return defaultVirtualMotion;
+  }
+
+  const vec2 renderTargetUVNow = cameraNDCToScreenUV(renderTargetCamera, clipNow.xy / clipNow.w);
+  // Note: A point that was outside the render target's picture a frame ago has no history: the nearest place of the picture is the best that can be offered.
+  const vec2 renderTargetUVPrev = clamp(cameraNDCToScreenUV(renderTargetCamera, clipPrev.xy / clipPrev.w), vec2(0.0f, 0.0f), vec2(1.0f, 1.0f));
+
+  // The same two places in the main picture, as a screen UV step (the rectangle is linear in the render target's UV; a negative span is a mirror image)
+  const vec2 screenRectSpan = vec2(screenRect.z - screenRect.x, screenRect.w - screenRect.y);
+  const vec2 screenUVMotion = (renderTargetUVPrev - renderTargetUVNow) * screenRectSpan;
+
+  // The pixel's place one frame ago, and the point of the previous camera's ray through it as far away as the virtual hit is now
+  const vec2 ndcNow = cameraPixelCoordinateToNDC(mainCamera, pixelCoordinate);
+  const vec2 screenUVPrev = cameraNDCToScreenUV(mainCamera, ndcNow + screenUVMotion * vec2(2.0f, -2.0f));
+  const vec3 prevDirection = cameraScreenUVToPrevDirection(mainCamera, screenUVPrev, false).worldDirection;
+  const vec3 prevVirtualHitPosition = cameraGetPreviousWorldPosition(mainCamera) + prevDirection * virtualHitDistance;
+
+  const vec3 direction = cameraPixelCoordinateToDirection(mainCamera, pixelCoordinate, false).worldDirection;
+  const vec3 virtualHitPosition = cameraGetWorldPosition(mainCamera) + direction * virtualHitDistance;
+
+  return prevVirtualHitPosition - virtualHitPosition;
+}

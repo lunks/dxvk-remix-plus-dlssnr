@@ -1103,6 +1103,15 @@ namespace dxvk {
     auto const& renderTargetCamera { getSceneManager().getCameraManager().getCamera(CameraType::RenderToTexture) };
     constants.renderTargetCamera = renderTargetCamera.getShaderConstants(/*freecam =*/ false);
     constants.enableRaytracedRenderTarget = renderTargetCamera.isValid(m_device->getCurrentFrameId()) && RtxOptions::RaytracedRenderTarget::enable();
+    // [nfs2se 0004] the screen's placement in the main picture and the history switch (see rtx_options.h)
+    {
+      const Vector4 screenRect = RtxOptions::RaytracedRenderTarget::screenRect();
+      constants.raytracedRenderTargetScreenRectX0 = screenRect.x;
+      constants.raytracedRenderTargetScreenRectY0 = screenRect.y;
+      constants.raytracedRenderTargetScreenRectX1 = screenRect.z;
+      constants.raytracedRenderTargetScreenRectY1 = screenRect.w;
+      constants.raytracedRenderTargetDiscardHistory = RtxOptions::RaytracedRenderTarget::discardHistory() ? 1u : 0u;
+    }
     const CameraManager& cameraManager = getSceneManager().getCameraManager();
 
     const bool enablePortalVolumes = RtxGlobalVolumetrics::enableInPortals() &&

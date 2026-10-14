@@ -164,6 +164,13 @@ struct GeometryResolverState : IBasePayloadState
       set { _encodedFlags = packedFlagAssign(_encodedFlags, 1 << 9, newValue); }
   }
 
+  // [nfs2se 0004] Note: The primary ray hit a raytraced render target screen and was redirected into the render target camera.
+  property bool renderTargetRedirect
+  {
+      get { return packedFlagGet(_encodedFlags, 1 << 10); }
+      set { _encodedFlags = packedFlagAssign(_encodedFlags, 1 << 10, newValue); }
+  }
+
   // Misc packed properties
 
   // Note: Indicates portal space in which the surface was hit
@@ -345,10 +352,18 @@ struct GeometryPSRResolverState : IBasePayloadState
     set { _encodedFlags = packedFlagAssign(_encodedFlags, 1 << 9, newValue); }
   }
 
-  property bool pomOpaqueSurfaceEncountered 
+  property bool pomOpaqueSurfaceEncountered
   {
     get { return packedFlagGet(_encodedFlags, 1 << 10); }
     set { _encodedFlags = packedFlagAssign(_encodedFlags, 1 << 10, newValue); }
+  }
+
+  // [nfs2se 0004] Note: The ray being resolved came out of a raytraced render target screen (it was redirected into the render
+  // target camera): its virtual motion is not that of a point seen straight through the main camera.
+  property bool viaRenderTarget
+  {
+    get { return packedFlagGet(_encodedFlags, 1 << 11); }
+    set { _encodedFlags = packedFlagAssign(_encodedFlags, 1 << 11, newValue); }
   }
 
   property bool directionAltered

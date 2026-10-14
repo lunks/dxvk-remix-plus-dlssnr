@@ -443,6 +443,15 @@ namespace dxvk {
       RTX_OPTION_ARGS("rtx.raytracedRenderTarget", bool, enable, true,
                       "Enables or disables raytracing for render-to-texture effects.  The render target to be raytraced must be specified in the texture selection menu.",
                       args.flags = RtxOptionFlags::InvalidatesDrawcallTranslation);
+      // [nfs2se 0004] Motion of the pixels seen through a raytraced render target (TODO[REMIX-3500] in geometry_resolver.slangh: the redirected ray's motion vectors are wrong)
+      RTX_OPTION("rtx.raytracedRenderTarget", Vector4, screenRect, Vector4(0.0f, 0.0f, 0.0f, 0.0f),
+                 "Where the surface that shows the render target (the screen) sits in the main camera's picture, as screen UV fractions (0 to 1, top left origin): x0, y0 = where the render target's UV (0, 0) lands, x1, y1 = where its UV (1, 1) lands "
+                 "(x0 > x1 for a mirror image). Valid for a screen that is fixed on the screen (glued to the camera) and shows the render target linearly. When given, a pixel seen through the screen gets the motion vector of the PICTURE "
+                 "(where the same point of the rendered scene was in the render target camera's previous picture, mapped through the screen) instead of the one Remix computes for the main camera (which is wrong, see REMIX-3500) and the DLSS-RR guide buffers (depth, normal, motion) "
+                 "describe the surface seen in the render target rather than the screen. All zeros (default) keeps Remix's behaviour.");
+      RTX_OPTION("rtx.raytracedRenderTarget", bool, discardHistory, false,
+                 "If true, the pixels seen through a raytraced render target never reuse the previous frame's denoiser/upscaler history (the alternate disocclusion threshold is forced: DLSS-RR discards its history there). "
+                 "Noisier but cannot ghost. An alternative to rtx.raytracedRenderTarget.screenRect.");
     } raytracedRenderTarget;
 
     struct ViewModel {

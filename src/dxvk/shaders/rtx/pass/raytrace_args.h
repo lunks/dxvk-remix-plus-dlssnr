@@ -427,6 +427,16 @@ struct RaytraceArgs {
   // END of the struct so no existing field offsets move.
   float particleSkyAmbientScale;
 
+  // [nfs2se 0004] Raytraced render target (rtx.raytracedRenderTarget.screenRect / .discardHistory), appended at the END so no existing field offset moves.
+  // screenRect = where the screen (the surface that samples the render target) shows the render target: the screen UV (0..1, top left origin, fractions of the
+  // main camera's picture) of the render target's own UV (0, 0) in x0 y0 and of its UV (1, 1) in x1 y1.  x0 == x1 or y0 == y1 means "not given": the pixels
+  // seen through the screen keep Remix's motion vectors.
+  float raytracedRenderTargetScreenRectX0;
+  float raytracedRenderTargetScreenRectY0;
+  float raytracedRenderTargetScreenRectX1;
+  float raytracedRenderTargetScreenRectY1;
+  uint raytracedRenderTargetDiscardHistory;
+
   // NOTE: Add structs to the top section of RaytraceArgs, not the bottom.
   // NOTE: bool does not work in debug builds, use uint instead.
 };

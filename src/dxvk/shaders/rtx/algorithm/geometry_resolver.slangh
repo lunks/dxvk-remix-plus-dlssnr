@@ -47,6 +47,7 @@
 // undefined and compile the sky term out.
 #define RESOLVE_SKY_LIT_PARTICLES 1
 #include "rtx/algorithm/resolve.slangh"
+#include "rtx/algorithm/render_target_motion.slangh"   // [nfs2se 0004]
 #include "rtx/algorithm/volume_lighting.slangh"
 #include "rtx/pass/post_fx/post_fx_motion_blur_geometry_flags.slangh"
 #include "rtx/algorithm/nee_cache_light.slangh"
@@ -146,6 +147,25 @@ vec2 calcMotionVectorForRayMiss(const uvec2 pixelCoordinate)
   return motionVectorUVOffset * cb.camera.resolution;
 }
 
+// [nfs2se 0004] Raytraced render target pixels: the motion of the PICTURE (render_target_motion.slangh has the maths and the reasons; this is the constant buffer's view of it)
+vec4 renderTargetScreenRect()
+{
+  return vec4(cb.raytracedRenderTargetScreenRectX0, cb.raytracedRenderTargetScreenRectY0, cb.raytracedRenderTargetScreenRectX1, cb.raytracedRenderTargetScreenRectY1);
+}
+
+bool renderTargetMotionIsGiven()
+{
+  return renderTargetScreenRectIsGiven(renderTargetScreenRect());
+}
+
+vec3 calcRenderTargetVirtualMotion(
+  uvec2 pixelCoordinate, float virtualHitDistance, vec3 hitPosition, vec3 hitMotion, vec3 defaultVirtualMotion)
+{
+  return calcRenderTargetVirtualMotion(
+    cb.camera, cb.renderTargetCamera, renderTargetScreenRect(),
+    pixelCoordinate, virtualHitDistance, hitPosition, hitMotion, defaultVirtualMotion);
+}
+
 // Geometry Resolver Vertex Functions
 
 void geometryResolverOutputMiss<
@@ -240,7 +260,7 @@ void geometryResolverOutputSurface<
   PolymorphicSurfaceMaterialInteraction polymorphicSurfaceMaterialInteraction,
   vec3 radiance, vec3 attenuation, vec4 accumulatedRotation,
   uint mediumMaterialIndex, float virtualHitDistance, bool directionAltered,
-  bool useAlternateDisocclusionThreshold, bool isViewModel)
+  bool useAlternateDisocclusionThreshold, bool isViewModel, bool viaRenderTarget)
 {
   // Output Attenuation (Primary/secondary surface coherent)
 
@@ -309,8 +329,14 @@ void geometryResolverOutputSurface<
   // another structure for this. To avoid that, just output it like this for now.
 
   // Note: Virtual motion used to account for the ray traversing ray portals and through PSR interactions.
-  const vec3 virtualMotion = quaternionTransformVector(accumulatedRotation, surfaceInteraction.motion, true);
-  
+  vec3 virtualMotion = quaternionTransformVector(accumulatedRotation, surfaceInteraction.motion, true);
+
+  // [nfs2se 0004] A pixel seen through a raytraced render target moves with the picture (see calcRenderTargetVirtualMotion)
+  if (viaRenderTarget)
+  {
+    virtualMotion = calcRenderTargetVirtualMotion(pixelCoordinate, virtualHitDistance, surfaceInteraction.position, surfaceInteraction.motion, virtualMotion);
+  }
+
   if (PRIMARY_SURFACE)
   {
     imageStore(PrimaryVirtualMotionVector, ivec2(pixelCoordinate), vec4(virtualMotion, 0));
@@ -448,7 +474,7 @@ void geometryResolverOutputSurfaceDynamic(
   PolymorphicSurfaceMaterialInteraction polymorphicSurfaceMaterialInteraction,
   vec3 radiance, vec3 attenuation, vec4 accumulatedRotation,
   uint mediumMaterialIndex, float virtualHitDistance, bool directionAltered,
-  bool useAlternateDisocclusionThreshold, bool isViewModel)
+  bool useAlternateDisocclusionThreshold, bool isViewModel, bool viaRenderTarget)
 {
   if (primarySurface)
   {
@@ -458,7 +484,7 @@ void geometryResolverOutputSurfaceDynamic(
         pixelCoordinate, ray, rayInteraction, surface, surfaceInteraction,
         polymorphicSurfaceMaterialInteraction, radiance, attenuation, accumulatedRotation,
         mediumMaterialIndex, virtualHitDistance, directionAltered,
-        useAlternateDisocclusionThreshold, isViewModel);
+        useAlternateDisocclusionThreshold, isViewModel, viaRenderTarget);
     }
     else
     {
@@ -466,7 +492,7 @@ void geometryResolverOutputSurfaceDynamic(
         pixelCoordinate, ray, rayInteraction, surface, surfaceInteraction,
         polymorphicSurfaceMaterialInteraction, radiance, attenuation, accumulatedRotation,
         mediumMaterialIndex, virtualHitDistance, directionAltered,
-        useAlternateDisocclusionThreshold, isViewModel);
+        useAlternateDisocclusionThreshold, isViewModel, viaRenderTarget);
     }
   }
   else
@@ -477,7 +503,7 @@ void geometryResolverOutputSurfaceDynamic(
         pixelCoordinate, ray, rayInteraction, surface, surfaceInteraction,
         polymorphicSurfaceMaterialInteraction, radiance, attenuation, accumulatedRotation,
         mediumMaterialIndex, virtualHitDistance, directionAltered,
-        useAlternateDisocclusionThreshold, isViewModel);
+        useAlternateDisocclusionThreshold, isViewModel, viaRenderTarget);
     }
     else
     {
@@ -485,7 +511,7 @@ void geometryResolverOutputSurfaceDynamic(
         pixelCoordinate, ray, rayInteraction, surface, surfaceInteraction,
         polymorphicSurfaceMaterialInteraction, radiance, attenuation, accumulatedRotation,
         mediumMaterialIndex, virtualHitDistance, directionAltered,
-        useAlternateDisocclusionThreshold, isViewModel);
+        useAlternateDisocclusionThreshold, isViewModel, viaRenderTarget);
     }
   }
 }
@@ -2135,10 +2161,19 @@ void geometryResolverVertex(
       geometryResolverState.accumulatedRotation, cb.startInMediumMaterialIndex,
       geometryResolverState.accumulatedHitDistance, geometryResolverState.directionAltered,
       geometryResolverState.useAlternateDisocclusionThreshold,
-      geometryResolverState.isViewModelSurface);
+      geometryResolverState.isViewModelSurface, false);
   }
   else if (GBUFFER_FEATURE_RAYTRACED_RENDER_TARGET && cb.enableRaytracedRenderTarget && isRaytracedRenderTarget)
   {
+    // [nfs2se 0004] Remember that this pixel is seen through a render target (the flag reaches the PSR resolver through the geometry flags), and
+    // optionally make the denoiser/upscaler forget its history for it (rtx.raytracedRenderTarget.discardHistory): the PSR resolver reads this texture as the
+    // alternate disocclusion threshold request of the pixel's primary (the redirected) surface.
+    geometryResolverState.renderTargetRedirect = true;
+    if (cb.raytracedRenderTargetDiscardHistory != 0)
+    {
+      PrimaryDisocclusionThresholdMix[geometryResolverState.pixelCoordinate] = 1.0f;
+    }
+
     GeometryFlags geometryFlags = (GeometryFlags)0;
     geometryFlags.isViewModel = geometryResolverState.isViewModelSurface;
     geometryFlags.portalSpace = geometryResolverState.portalSpace;
@@ -2281,7 +2316,7 @@ void geometryResolverVertex(
       geometryResolverState.accumulatedRotation, cb.startInMediumMaterialIndex,
       geometryResolverState.accumulatedHitDistance, geometryResolverState.directionAltered,
       geometryResolverState.useAlternateDisocclusionThreshold,
-      geometryResolverState.isViewModelSurface);
+      geometryResolverState.isViewModelSurface, false);
   }
 
   if (GBUFFER_FEATURE_INLINE_PSR_SAMPLING && !push.usePSRPrepare && geometryResolverState.performedAnyPSR())
@@ -2803,7 +2838,8 @@ void geometryPSRResolverVertex(
     geometryPSRResolverState.insideMedium = false;
     geometryPSRResolverState.mediumMaterialIndex = cb.startInMediumMaterialIndex;
     geometryPSRResolverState.accumulatedRotation = getIdentityQuaternion();
-    
+    geometryPSRResolverState.viaRenderTarget = true;       // [nfs2se 0004]
+
   }
   else if (useReflectionPSRSample)
   {
@@ -2863,7 +2899,7 @@ void geometryPSRResolverVertex(
       geometryPSRResolverState.accumulatedRotation, geometryPSRResolverState.mediumMaterialIndex,
       geometryPSRResolverState.accumulatedHitDistance, true,
       geometryPSRResolverState.useAlternateDisocclusionThreshold,
-      geometryPSRResolverState.isViewModelSurface);
+      geometryPSRResolverState.isViewModelSurface, geometryPSRResolverState.viaRenderTarget);
 
     // Output Emissive Radiance
 
@@ -2888,9 +2924,15 @@ void geometryPSRResolverVertex(
     bool hasPortalThis = geometryPSRResolverState.portalSpace != PORTAL_SPACE_NONE;
     const float minAttenuation = 0.2f;
 
+    // [nfs2se 0004] A pixel seen through a raytraced render target always takes its guide (depth, normal, motion) from the surface it shows: the screen it was
+    // seen through is a flat, motionless plane in front of the camera and the surface is nowhere near where the main camera would see it (hasRefractionThis is
+    // always true for it), so without this the upscaler's guide describes the screen while the colour is the picture and the picture smears.
+    const bool replaceWithRenderTargetSurface = geometryPSRResolverState.viaRenderTarget && renderTargetMotionIsGiven();
+
     if (calcBt709Luminance(geometryPSRResolverState.attenuation) > minAttenuation &&
-        (!hasRefractionThis || (materialType != surfaceMaterialTypeRayPortal && hasPortalThis)) &&
-        !geometryPSRResolverState.isRefractionDistorted)
+        (replaceWithRenderTargetSurface ||
+         ((!hasRefractionThis || (materialType != surfaceMaterialTypeRayPortal && hasPortalThis)) &&
+          !geometryPSRResolverState.isRefractionDistorted)))
     {
       // Recreate the original primary camera ray
       const Ray originalCameraRay = rayCreatePrimaryFromPixel(cb.camera, pixelCoordinate, false);
@@ -2904,7 +2946,13 @@ void geometryPSRResolverVertex(
       // Output Motion Vector (Primary/secondary surface coherent)
       // Note: Virtual motion used to account for the ray traversing ray portals and through PSR interactions.
       vec3 virtualMotion = quaternionTransformVector(geometryPSRResolverState.accumulatedRotation, surfaceInteraction.motion, true);
-      
+
+      if (replaceWithRenderTargetSurface)
+      {
+        virtualMotion = calcRenderTargetVirtualMotion(
+          pixelCoordinate, geometryPSRResolverState.accumulatedHitDistance, surfaceInteraction.position, surfaceInteraction.motion, virtualMotion);
+      }
+
       vec4 prevWorldPosition = vec4(virtualHitPosition + virtualMotion, 1);
       vec4 prevNDC = mul(cb.camera.prevWorldToProjection, prevWorldPosition);
       prevNDC /= prevNDC.w;
@@ -3131,6 +3179,7 @@ void geometryResolver(ivec2 pixelCoordinate) {
   geometryFlags.performPSTR = geometryResolverState.performPSTR;
   geometryFlags.performPSRR = geometryResolverState.performPSRR;
   geometryFlags.pomOpaqueSurfaceEncountered = geometryResolverState.pomOpaqueSurfaceEncountered;
+  geometryFlags.renderTargetRedirect = geometryResolverState.renderTargetRedirect;       // [nfs2se 0004]
 
   // Output miss data for the secondary surface if it is not present
   // Note: Known to not be the selected surface in this case, hence why false is passed for this.
@@ -3707,6 +3756,9 @@ void geometryPSRResolverPass(ivec2 pixelCoordinate) {
   }
 
   unpackPSRData(psrData, geometryPSRResolverState);
+
+  // [nfs2se 0004] The transmission slot of a pixel the first hit flagged holds the ray its raytraced render target screen redirected
+  geometryPSRResolverState.viaRenderTarget = push.isTransmissionPSR && geometryFlags.renderTargetRedirect;
 
   if (!geometryPSRResolverState.isValid)
   {
