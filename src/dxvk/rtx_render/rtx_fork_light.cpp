@@ -128,7 +128,14 @@ namespace fork_hooks {
 
     const uint16_t bufferIdx = light->getBufferIdx();
 
-    if (!newLight.isDynamic && !LightManager::suppressLightKeeping()) {
+    // [nfs2se capi-fix] An externally tracked light (externalId valid) is anchored to a ReplacementInstance: it is
+    // a light under a replaced mesh and must FOLLOW that mesh. NVIDIA mainline overwrites it on every call
+    // (LightManager::updateExternallyTrackedLight: `*light = newLight`); the sleep below counts every call
+    // (no equality test) and never wakes, so a lamp on a moving object froze after numFramesToKeepLights/2
+    // updates. Only the hash-map (addExternalLight) path keeps the sleep.
+    const bool followsObject = externalId != kInvalidExternallyTrackedLightId;
+
+    if (!newLight.isDynamic && !LightManager::suppressLightKeeping() && !followsObject) {
       const uint32_t isStaticCount = light->isStaticCount;
 
       // If this light hasn't moved for N frames, put it to sleep to preserve
