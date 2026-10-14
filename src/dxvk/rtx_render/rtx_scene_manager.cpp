@@ -2458,6 +2458,20 @@ namespace dxvk {
     replacementInstance->dirtyFlags.clr(ReplacementInstance::kDynamicFeatureMask);
 
     if (std::vector<AssetReplacement>* pReplacements = fork_hooks::externalDrawMeshReplacement(*m_pReplacer, meshHash)) {
+      // [nfs2se capi-fix] Bookkeeping the D3D9 branch (submitDrawState, lines ~737-766) does around
+      // drawReplacements() and this branch used to skip:
+      //  * activeReplacements: an instance that was first drawn as a plain API mesh (or under another
+      //    replacement set) keeps the prim layout of that time; drawReplacements() indexes prims[i] for every
+      //    replacement and processReplacementLights() creates a fresh light every frame when prims is too short.
+      //    Re-initialise it exactly as the D3D9 branch does (`!activeReplacementsMatch` -> clear()).
+      //  * frameLastSeen (set below): without it the instance GC (garbageCollectReplacementInstances) collects the
+      //    instance every frame (the field stays 0) and the level-2 filter of findOrCreateReplacementInstance
+      //    (`frameLastSeen != currentFrame`) cannot exclude an instance already matched this frame.
+      if (replacementInstance->activeReplacements != pReplacements) {
+        replacementInstance->clear();
+        replacementInstance->dirtyFlags.clr(ReplacementInstance::kDynamicFeatureMask);
+      }
+
       // Copy the DrawCallState so we don't mutate the caller's state. Point geometryData
       // at submeshes[0] as the replacement geometry template, clear externalMaterial so
       // the USD replacement material takes precedence, and use a neutral default material
@@ -2470,7 +2484,17 @@ namespace dxvk {
 
       MaterialData renderMaterialData = LegacyMaterialData().as<OpaqueMaterialData>();
       drawReplacements(ctx, &replacementDrawCall, pReplacements, renderMaterialData, replacementInstance);
+
+      replacementInstance->frameLastSeen = m_device->getCurrentFrameId();
       return;
+    }
+
+    // [nfs2se capi-fix] The opposite transition (a mesh that was replaced and is not any more, e.g. a mod reload):
+    // the D3D9 branch clears the instance because activeReplacements != nullptr; so must this one, or the stale
+    // (possibly dangling) pointer and the replacement's prim layout stay.
+    if (replacementInstance->activeReplacements != nullptr) {
+      replacementInstance->clear();
+      replacementInstance->dirtyFlags.clr(ReplacementInstance::kDynamicFeatureMask);
     }
 
     AxisAlignedBoundingBox geometryBBox;
