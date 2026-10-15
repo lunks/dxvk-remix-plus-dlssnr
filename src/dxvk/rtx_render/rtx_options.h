@@ -668,6 +668,8 @@ namespace dxvk {
     RTX_OPTION("rtx", bool, adaptiveResolutionDenoising, true, "");
     RTX_OPTION_ENV("rtx", bool, adaptiveAccumulation, true, "DXVK_USE_ADAPTIVE_ACCUMULATION", "");
     RTX_OPTION("rtx", uint32_t, numFramesToKeepInstances, 1, "");
+    // [nfs2se 0005] Marker for hosts: this build carries the C API fixes of patch 0001 (see patches/0005 of the NFS2 SE tree). Nothing reads the value; a host probes that the option exists.
+    RTX_OPTION("rtx", uint32_t, capiFixLevel, 1, "A marker option, read by nothing: its existence tells a host that this Remix build carries the C API external-draw replacement fixes (the instance of a replaced API mesh is kept alive and re-initialised).");
     RTX_OPTION("rtx", uint32_t, numFramesToKeepBLAS, 1, "");
     RTX_OPTION("rtx", uint32_t, numFramesToKeepLights, 100, ""); // NOTE: This was the default we've had for a while, can probably be reduced...
     RTX_OPTION("rtx", uint32_t, sceneKeepAliveFrames, 0, 
