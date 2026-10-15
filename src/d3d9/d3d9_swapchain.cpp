@@ -1464,17 +1464,33 @@ namespace dxvk {
       existingSurface = VK_NULL_HANDLE;
     }
 
+    // [nfs2se 0006] DLSS-FG requested but not available: stop with the reason instead of running without it
+    if (RtxOptions::frameGenerationType() == FrameGenerationType::DLSS && !dlfgEnabled) {
+      NGXContext& ngx = m_device->getCommon()->metaNGXContext();
+      const std::string& why = ngx.getDLFGNotSupportedReason();
+      dlfgFatal(!ngx.supportsDLFG() ? str::format("NGX does not offer it here: ", why.empty() ? std::string("FrameGeneration_Available = 0 or NGX not initialised") : why)
+              : m_device->getCommon()->metaDLFG().hasDLFGFailed() ? std::string("NGX reported a frame generation failure")
+              : std::string("rtx.dlfg.enable resolved to False (a higher option layer overrides it)"));
+    }
+
     if (dlfgEnabled) {
       // DLFG presents 2 times (1 more frame) in each real frame,
       // increase image count by 1 to avoid resource waiting.
       presenterDesc.imageCount++;
-      m_dlfgPresenter = new DxvkDLFGPresenter(m_device,
-                                              m_context,
-                                              m_window,
-                                              m_device->adapter()->vki(),
-                                              m_device->vkd(),
-                                              presenterDevice,
-                                              presenterDesc);
+      try {
+        m_dlfgPresenter = new DxvkDLFGPresenter(m_device,
+                                                m_context,
+                                                m_window,
+                                                m_device->adapter()->vki(),
+                                                m_device->vkd(),
+                                                presenterDevice,
+                                                presenterDesc);
+      } catch (const DxvkError& e) {
+        // [nfs2se 0006] the old path left no presenter and retried every frame: a black screen forever
+        dlfgFatal(str::format("its presenter could not be created on queue family ", presenterDevice.queueFamily, ": ", e.message()));
+      }
+      Logger::info(str::format("DLFG: presenter created, presenting from queue family ", presenterDevice.queueFamily,
+                               ", interpolated frames per rendered frame: ", m_context->dlfgInterpolatedFrameCount()));
     } else if (createFsrfgPresenter) {
       // FFX contexts are created lazily in presentImage() when ready.
       // The captured surface is handed over rather than re-created.

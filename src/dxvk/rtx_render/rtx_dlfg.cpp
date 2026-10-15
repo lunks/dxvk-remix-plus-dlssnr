@@ -1,6 +1,8 @@
 #include "dxvk_device.h"
 #include "rtx_dlfg.h"
 
+#include <cstdio>
+
 namespace {
   // 6x frame generation: 1 rendered frame + up to 5 interpolated frames
   constexpr uint32_t kDLFGMaxInterpolatedFrames = 6;
@@ -75,6 +77,26 @@ namespace dxvk {
       nameInfo.pObjectName = name;
       m_device->vkd()->vkSetDebugUtilsObjectNameEXT(m_device->handle(), &nameInfo);
     }
+  }
+
+  // [nfs2se 0006]
+  void dlfgFatal(const std::string& reason) {
+    Logger::err(str::format("DLFG FATAL (exit 82): ", reason));
+    char exe[MAX_PATH] = {};
+    const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
+    std::string path = (n > 0 && n < MAX_PATH) ? std::string(exe, n) : std::string();
+    const size_t slash = path.find_last_of("\\/");
+    path = (slash == std::string::npos ? std::string(".") : path.substr(0, slash)) + "\\FATAL.txt";
+    if (FILE* f = std::fopen(path.c_str(), "wb")) {
+      std::fprintf(f, "Remix: the game was stopped on purpose (exit 82).\r\nreason:  DLSS Frame Generation was requested (rtx.frameGenerationType = DLSS) and %s\r\n"
+                      "\r\nA requested frame generation that cannot run ends the game instead of showing a black screen or running without it (Remix Plus patch 0006). The same line is in remix-dxvk.log.\r\n",
+                   reason.c_str());
+      std::fclose(f);
+    } else {
+      Logger::err(str::format("DLFG FATAL: FATAL.txt could not be written to ", path));
+    }
+    TerminateProcess(GetCurrentProcess(), 82);
+    for (;;) { }
   }
 
   void DxvkDLFGCommandList::submit() {
@@ -247,7 +269,8 @@ namespace dxvk {
     // Allocate only as many swapchain images as the configured multiplier needs (interpolated + 1 rendered),
     // rather than always allocating the hardware maximum. Swapchain will be recreated if the user increases
     // the multiplier at runtime (see acquireNextImage).
-    adjustedDesc.imageCount = m_ctx->dlfgInterpolatedFrameCount() + 1;
+    adjustedDesc.imageCount = m_ctx->dlfgInterpolatedFrameCount() + 2;  // [nfs2se 0006] +1 spare: N acquires are held at once
+    m_dlfgSyncSlot = 0;  // [nfs2se 0006] the base presenter just rebuilt m_semaphores
     
     VkResult res = vk::Presenter::recreateSwapChain(adjustedDesc);
     if (res != VK_SUCCESS) {
@@ -373,6 +396,15 @@ namespace dxvk {
   }
 
   bool DxvkDLFGPresenter::swapchainAcquire(SwapchainImage& swapchainImage) {
+    // [nfs2se 0006] a fresh acquire/present semaphore pair for every acquire of a batch: a binary semaphore must not be
+    // signaled again by the next acquire before its wait has run (one shared pair hangs on Linux drivers)
+    if (m_semaphores.empty()) {  // no swapchain (zero-sized window): retry after recreateSwapChain, as for any acquire error
+      m_lastPresentStatus = VK_ERROR_OUT_OF_DATE_KHR;
+      return false;
+    }
+    m_frameIndex = m_dlfgSyncSlot % m_semaphores.size();
+    m_dlfgSyncSlot = (m_frameIndex + 1) % m_semaphores.size();
+    swapchainImage.syncSlot = m_frameIndex;
     m_lastPresentStatus = vk::Presenter::acquireNextImage(swapchainImage.sync, swapchainImage.index, true);
     if (m_lastPresentStatus != VK_SUCCESS) {
       // got an error, bail until it's handled
@@ -457,7 +489,7 @@ namespace dxvk {
                         VK_IMAGE_ASPECT_COLOR_BIT,
                         VK_ACCESS_MEMORY_READ_BIT,
                         VK_ACCESS_TRANSFER_WRITE_BIT,
-                        m_swapchainImageLayouts[present.acquiredImageIndex],
+                        m_swapchainImageLayouts[renderedSwapchainImage.index],  // [nfs2se 0006] swapchain index, not the backbuffer's
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -491,28 +523,35 @@ namespace dxvk {
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-    m_swapchainImageLayouts[present.acquiredImageIndex] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    m_swapchainImageLayouts[renderedSwapchainImage.index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;  // [nfs2se 0006]
 
     barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    commandList->addWaitSemaphore(renderedSwapchainImage.sync.acquire);
+    // [nfs2se 0006] the acquire semaphore is waited by both callers; a second wait in the same submit consumes a
+    // signal that never comes (binary semaphores on Linux) and the DLFG queue stalls on its first frame
   }
 
-  bool DxvkDLFGPresenter::submitPresent(SwapchainImage& image, const PresentJob& present, uint64_t pacerSemaphoreWaitValue, VkSetPresentConfigNV* presentMetering) {
+  bool DxvkDLFGPresenter::submitPresent(SwapchainImage& image, const PresentJob& present, uint64_t pacerSemaphoreWaitValue, VkSetPresentConfigNV* presentMetering,
+                                        bool presentSemaphoreSignaled) {
     const auto& reflex = m_ctx->getCommonObjects()->metaReflex();
 
-    if (!kSkipPacerSemaphoreWait && pacerSemaphoreWaitValue != kPacerDoNotWait) {
-      assert(presentMetering == nullptr);
-
+    // [nfs2se 0006] vkQueuePresentKHR below always waits image.sync.present, so it needs exactly one signal: the first
+    // interpolated frame gets it from its interpolation command list, every other present from this command list
+    // (which also waits on the pacer when there is a pacer value); before, a present without a pacer value waited forever
+    if (!presentSemaphoreSignaled) {
       // inject a command list that waits on the pacer semaphore and signals the present semaphore
       // this will cause the present below to wait on this timeline semaphore, which the pacer thread will signal from the CPU
       DxvkDLFGCommandList* commandList = m_presentPacingCommandLists.nextCmdList();
       commandList->endRecording();
-      commandList->addWaitSemaphore(m_dlfgPacerSemaphore->handle(), pacerSemaphoreWaitValue);
+      if (!kSkipPacerSemaphoreWait && pacerSemaphoreWaitValue != kPacerDoNotWait) {
+        assert(presentMetering == nullptr);
+        commandList->addWaitSemaphore(m_dlfgPacerSemaphore->handle(), pacerSemaphoreWaitValue);
+      }
       commandList->addSignalSemaphore(image.sync.present);
       commandList->submit();
     }
 
+    m_frameIndex = image.syncSlot;  // [nfs2se 0006] the base presentImage waits m_semaphores[m_frameIndex].present
     reflex.beginOutOfBandPresent(present.present.cachedReflexFrameId);
     m_lastPresentStatus = vk::Presenter::presentImage(present.status, present.present, present.frameInterpolation, image.index, true, presentMetering);
     reflex.endOutOfBandPresent(present.present.cachedReflexFrameId);
@@ -706,7 +745,7 @@ namespace dxvk {
         // present the first interpolated frame
         // if we're using CPU pacing, this frame is presented immediately;
         // if we're using hardware pacing, this present sends down the pacing info
-        if (!submitPresent(interpolatedSwapchainImages[0], present, kPacerDoNotWait, usePresentMetering ? &presentMetering : nullptr)) {
+        if (!submitPresent(interpolatedSwapchainImages[0], present, kPacerDoNotWait, usePresentMetering ? &presentMetering : nullptr, true)) {
           // got an error, bail until it's handled
           continue;
         }
@@ -896,6 +935,7 @@ namespace dxvk {
     };
 
     uint64_t lastFrameDlfgEndGpuTicks = 0;
+    uint32_t fenceTimeouts = 0;  // [nfs2se 0006] consecutive
 
     while (!m_pacerThread.stopped.load()) {
       {
@@ -923,9 +963,14 @@ namespace dxvk {
 
         if (res != VK_SUCCESS) {
           Logger::warn("DLFG pacer: fence timed out");
+          // [nfs2se 0006] five 1 s timeouts in a row: the DLFG queue is stuck (the picture is frozen)
+          if (++fenceTimeouts >= 5) {
+            dlfgFatal("its GPU work did not finish for 5 s in a row (DLFG pacer: fence timed out x5): the frame generation queue is stuck");
+          }
           lastFrameDlfgEndGpuTicks = 0;
           pacerActive = false;
         } else {
+          fenceTimeouts = 0;
           pacerActive = queryPoolDLFG->readTimestamp(&dlfgTimestamp, pacer.dlfgQueryIndex);
 
           if (lastFrameDlfgEndGpuTicks == 0) {

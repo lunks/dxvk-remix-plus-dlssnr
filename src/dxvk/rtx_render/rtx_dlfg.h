@@ -19,6 +19,10 @@ namespace dxvk {
 
   struct DxvkDeviceQueue;
 
+  // [nfs2se 0006] DLSS Frame Generation was requested and cannot run: the reason goes to the log and to FATAL.txt
+  // next to the exe, and the process ends with exit code 82 (never a black screen or a silent run without FG).
+  [[noreturn]] void dlfgFatal(const std::string& reason);
+
   namespace vk {
     struct PresenterDevice;
     struct PresenterDesc;
@@ -197,6 +201,7 @@ namespace dxvk {
       vk::PresenterImage image;
       vk::PresenterSync sync;
       uint32_t index;
+      uint32_t syncSlot = 0;  // [nfs2se 0006] the m_semaphores pair this acquire used; its present waits the same pair
     };
 
     WorkerThread m_pacerThread;
@@ -213,13 +218,14 @@ namespace dxvk {
     bool interpolateFrame(DxvkDLFGCommandList* commandList, SwapchainImage& swapchainImage, const PresentJob& present, uint32_t interpolatedFrameIndex);
     void blitRenderedFrame(DxvkDLFGCommandList* commandList, SwapchainImage& renderedSwapchainImage, const PresentJob& present, bool frameInterpolated);
     bool submitPresent(SwapchainImage& image, const PresentJob& present, uint64_t pacerSemaphoreWaitValue, VkSetPresentConfigNV*
-                       presentMetering);
+                       presentMetering, bool presentSemaphoreSignaled = false);
     void runPresentThread();
     void runPacerThread();
     void createBackbuffers();
     
     Rc<RtxSemaphore> m_dlfgPacerSemaphore = nullptr;
-    uint64_t m_dlfgPacerSemaphoreValue = 0;
+    uint64_t m_dlfgPacerSemaphoreValue = 1;  // [nfs2se 0006] a timeline signal must exceed the initial value 0
+    uint32_t m_dlfgSyncSlot = 0;             // [nfs2se 0006] next m_semaphores pair: one pair per acquire, not one per batch
     Rc<RtxSemaphore> m_dlfgPacerToPresentSemaphore = nullptr;
   };
 

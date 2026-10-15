@@ -176,6 +176,13 @@ namespace dxvk {
     uint32_t presentQueue = findQueueFamily(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
                                             VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT);
 
+    // [nfs2se 0006] DLFG presents from a second queue of the graphics family: on a Wayland surface (gamescope's WSI
+    // layer, winewayland) the NVIDIA ICD reports no present support for the compute-only family, so the DLFG presenter
+    // could never be created there. Needs a distinct VkQueue (createDevice hands out queue index 1 of the family).
+    if (graphicsQueue != VK_QUEUE_FAMILY_IGNORED && m_queueFamilies[graphicsQueue].queueCount > 1) {
+      presentQueue = graphicsQueue;
+    }
+
     if (presentQueue != VK_QUEUE_FAMILY_IGNORED) {
       queues.present = presentQueue;
     }
