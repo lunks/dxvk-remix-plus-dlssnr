@@ -1473,6 +1473,14 @@ namespace dxvk {
               : std::string("rtx.dlfg.enable resolved to False (a higher option layer overrides it)"));
     }
 
+    // [nfs2se 0006] frame generation without Reflex adds input lag: Reflex is part of the request (owner 2026-10-15)
+    if (dlfgEnabled && !m_device->getCommon()->metaReflex().reflexInitialized()) {
+      dlfgFatal("NVIDIA Reflex did not initialise (under Proton it needs DXVK_NVAPI_VKREFLEX=1, the dxvk-nvapi Vulkan Reflex layer; see remix-dxvk.log for the Reflex line)");
+    }
+    if (dlfgEnabled && RtxOptions::reflexMode() == ReflexMode::None) {
+      dlfgFatal("rtx.reflexMode resolved to None (frame generation runs with Reflex on: rtx.reflexMode = 1 or 2)");
+    }
+
     if (dlfgEnabled) {
       // DLFG presents 2 times (1 more frame) in each real frame,
       // increase image count by 1 to avoid resource waiting.
