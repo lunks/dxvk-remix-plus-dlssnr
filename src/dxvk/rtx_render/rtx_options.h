@@ -497,6 +497,8 @@ namespace dxvk {
     } displacement;
 
     RTX_OPTION("rtx", bool, resolvePreCombinedMatrices, true, "");
+    // [nfs2se 0013] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoPrevTransformEXT is honoured.
+    RTX_OPTION("rtx", uint32_t, capiInstancePrevTransformExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoPrevTransformEXT (the previous object-to-world of a new API instance, so its first frame has motion).");
 
     RTX_OPTION("rtx", uint32_t, minPrimsInDynamicBLAS, 1000, "The minimum number of triangles required to promote a mesh to it's own BLAS, otherwise it lands in the merged BLAS with multiple other meshes.");
     RTX_OPTION("rtx", uint32_t, maxPrimsInMergedBLAS, 50000, "The maximum number of triangles for a mesh that can be in the merged BLAS.  ");

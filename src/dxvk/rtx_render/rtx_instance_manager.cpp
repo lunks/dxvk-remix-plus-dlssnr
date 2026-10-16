@@ -1158,7 +1158,11 @@ namespace dxvk {
 
         // Update the transform based on what state we're in
         if (isFirstUpdateAfterCreation) {
-          hasTransformChanged = currentInstance.teleport(objectToWorld);
+          // [nfs2se 0013] A host that knows where a new instance was last frame (remixapi_InstanceInfoPrevTransformEXT)
+          // gives it real motion in its first frame instead of "still".
+          hasTransformChanged = drawCall.getTransformData().hasPrevObjectToWorld
+            ? currentInstance.teleport(objectToWorld, drawCall.getTransformData().prevObjectToWorld)
+            : currentInstance.teleport(objectToWorld);
         } else if (isFirstUpdateThisFrame) {
           hasTransformChanged = currentInstance.move(objectToWorld);
         } else {
