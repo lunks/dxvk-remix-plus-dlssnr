@@ -1352,6 +1352,11 @@ namespace {
     if (!remixDevice) {
       return REMIXAPI_ERROR_CODE_REMIX_DEVICE_WAS_NOT_REGISTERED;
     }
+    // [nfs2se 0008] A mesh queued by remixapi_CreateMeshBatched is registered at the next flush point. Without this
+    // flush a CreateMeshBatched(H) + DestroyMesh(H) pair before that point reaches the render thread as destroy-then-
+    // register: H stays registered with the old surfaces, and a later CreateMesh(H) with new content is ignored as a
+    // repeated registration (AssetReplacer::registerExternalMesh). Takes s_mutex itself, so it runs before the lock.
+    flushPendingMeshes(remixDevice);
     std::lock_guard lock { s_mutex };
     remixDevice->EmitCs([cHandle = handle](dxvk::DxvkContext* ctx) {
       ctx->getCommonObjects()->getSceneManager().destroyExternalMesh(cHandle);
