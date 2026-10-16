@@ -1664,6 +1664,24 @@ namespace dxvk {
     return boundOMM ? ommRequest.ommSrcHash : kEmptyHash;
   }
 
+  bool OpacityMicromapManager::targetedRebind() {
+    return OpacityMicromapOptions::targetedRebind();
+  }
+
+  bool OpacityMicromapManager::touchOpacityMicromap(Rc<DxvkContext> ctx, XXH64_hash_t ommSrcHash) {
+    auto ommCacheItemIter = m_ommCache.find(ommSrcHash);
+    if (ommCacheItemIter == m_ommCache.end()) {
+      return false;
+    }
+    OpacityMicromapCacheItem& ommCacheItem = ommCacheItemIter->second;
+    ommCacheItem.lastUseFrameIndex = m_device->getCurrentFrameId();
+    m_leastRecentlyUsedList.splice(m_leastRecentlyUsedList.end(), m_leastRecentlyUsedList, ommCacheItem.leastRecentlyUsedListIter);
+    if (ommCacheItem.blasOmmBuffers.ptr()) {
+      ctx->getCommandList()->trackResource<DxvkAccess::Read>(ommCacheItem.blasOmmBuffers);
+    }
+    return true;
+  }
+
   void OpacityMicromapManager::addBarriersForBuiltOMMs(Rc<DxvkContext> ctx) {
 
     if (m_boundOmmsRequireSynchronization) {
@@ -2320,6 +2338,7 @@ namespace dxvk {
       if (result == OmmResult::Success) {
         ommCacheItem.cacheState = OpacityMicromapCacheState::eStep3_Built;
         m_hasNewlyBuiltOmms = true;
+        m_newlyBuiltOmmHashes.push_back(ommSrcHash); // [nfs2se 0010]
         // Move the item from the baked list to the end of the built list
         auto ommSrcHashIterToMove = ommSrcHashIter++;
         m_builtList.splice(m_builtList.end(), m_bakedList, ommSrcHashIterToMove);
@@ -2387,6 +2406,7 @@ namespace dxvk {
     m_numRequestedOMMBindings = 0;
     m_scratchMemoryUsedThisFrame = 0;
     m_hasNewlyBuiltOmms = false;
+    m_newlyBuiltOmmHashes.clear(); // [nfs2se 0010]
 
     // Clear caches if we need to rebuild OMMs
     {
@@ -2495,6 +2515,8 @@ namespace dxvk {
       } else { // budget == 0
         if (m_memoryManager.getPrevBudget() > 0) {
           clear();
+          // [nfs2se 0010] Cached BLASes may still reference the OMMs just dropped: rebuild them, as the options path does.
+          m_needsBlasRebuild = true;
         }
       }
 

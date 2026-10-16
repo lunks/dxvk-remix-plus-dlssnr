@@ -442,6 +442,21 @@ namespace dxvk {
     auto& instances = instanceManager.getInstanceTable();
     const uint32_t currentFrame = m_device->getCurrentFrameId();
 
+    // [nfs2se 0010] A cached bucket's BLAS was built with the OMMs bound at that time and is reused without a re-bind:
+    // keep those OMMs in use (LRU) and alive for this frame. One that is gone forces a rebuild of every bucket this frame.
+    if (opacityMicromapManager && OpacityMicromapManager::targetedRebind()) {
+      bool lostOmm = false;
+      for (const CachedBucketState& cachedBucket : m_cachedBuckets) {
+        for (XXH64_hash_t ommSrcHash : cachedBucket.boundOmmHashes) {
+          lostOmm |= !opacityMicromapManager->touchOpacityMicromap(ctx, ommSrcHash);
+        }
+      }
+      if (lostOmm) {
+        m_ommBindPending = true;
+        instanceManager.notifySceneChanged();
+      }
+    }
+
     // --- Full-skip fast path ---
     // If no scene changes occurred since the last build, we can reuse all cached
     // BLAS/TLAS data and skip the expensive per-instance iteration, bucket merging,
@@ -492,7 +507,7 @@ namespace dxvk {
         // If new OMMs were built this frame, force a full scene rebuild next frame
         // so tryBindOpacityMicromap runs on all instances and the BLASes pick up the new OMMs.
         if (opacityMicromapManager && opacityMicromapManager->hasNewlyBuiltOmms()) {
-          m_ommBindPending = true;
+          notePendingOmmBindings(*opacityMicromapManager); // [nfs2se 0010]
           instanceManager.notifySceneChanged();
         }
         return;
@@ -546,6 +561,16 @@ namespace dxvk {
               break;
             }
 
+            // [nfs2se 0010] A newly built OMM this instance can bind. Split-billboard instances hash per billboard:
+            // treated as matching (conservative).
+            if (m_ommBindPendingTargeted &&
+                (OpacityMicromapManager::usesSplitBillboardOpacityMicromap(*inst) ||
+                 m_ommPendingHashes.count(OpacityMicromapManager::getOpacityMicromapHash(*inst)) != 0)) {
+              bucketDirty[bi] = true;
+              anyBucketDirty = true;
+              break;
+            }
+
             if (inst->getCacheIdentity() != cachedBucket.instanceCacheIdentities[ii]) {
               bucketDirty[bi] = true;
               anyBucketDirty = true;
@@ -576,6 +601,9 @@ namespace dxvk {
       // pending OMM binding invalidation is naturally consumed by the full pass.
       m_ommBindPending = false;
     }
+    // [nfs2se 0010] The targeted bindings were applied by the dirty marks above (or by the full pass).
+    m_ommBindPendingTargeted = false;
+    m_ommPendingHashes.clear();
 
     // Allocate the transform buffer
     DxvkBufferCreateInfo info;
@@ -1053,7 +1081,7 @@ namespace dxvk {
     // If new OMMs were built this frame, force a full scene rebuild next frame
     // so tryBindOpacityMicromap runs on all instances and the BLASes pick up the new OMMs.
     if (opacityMicromapManager && opacityMicromapManager->hasNewlyBuiltOmms()) {
-      m_ommBindPending = true;
+      notePendingOmmBindings(*opacityMicromapManager); // [nfs2se 0010]
       instanceManager.notifySceneChanged();
     }
 
@@ -1101,6 +1129,7 @@ namespace dxvk {
         cached.indexOffsets = bucket->indexOffsets;
         cached.isUnordered = bucket->usesUnorderedApproximations;
         cached.hasSssInstances = bucket->hasSssInstances;
+        cached.boundOmmHashes = bucket->boundOmmHashes; // [nfs2se 0010]
 
         // Capture the assigned BLAS (stored on bucket by createBlasBuffersAndInstances)
         if (bucket->assignedBlas) {
@@ -1144,6 +1173,17 @@ namespace dxvk {
         const UniqueBlasInstances& uniqueBlasEntry = m_uniqueDynamicBlas[uniqueBlasIdx];
         m_cachedDynamicBlasEntries.insert(uniqueBlasEntry.blasEntry);
       }
+    }
+  }
+
+  void AccelManager::notePendingOmmBindings(const OpacityMicromapManager& opacityMicromapManager) {
+    if (!OpacityMicromapManager::targetedRebind()) {
+      m_ommBindPending = true;
+      return;
+    }
+    m_ommBindPendingTargeted = true;
+    for (XXH64_hash_t ommSrcHash : opacityMicromapManager.getNewlyBuiltOmmHashes()) {
+      m_ommPendingHashes.insert(ommSrcHash);
     }
   }
 
@@ -1806,6 +1846,7 @@ namespace dxvk {
                                                          blasBucket->geometries[i], instanceManager);
           if (ommSourceHash != kEmptyHash) {
             blasBucket->hasOmmInstances = true;
+            blasBucket->boundOmmHashes.push_back(ommSourceHash); // [nfs2se 0010]
           }
         }
       }

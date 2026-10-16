@@ -48,6 +48,8 @@ namespace dxvk {
     RTX_OPTION("rtx.opacityMicromap", bool, enableBakingArrays, true, "Enables baking of opacity textures into Opacity Micromap arrays per triangle.");
     RTX_OPTION("rtx.opacityMicromap", bool, enableBuilding, true, "Enables building of Opacity Micromap arrays.");
     RTX_OPTION("rtx.opacityMicromap", bool, enableResetEveryFrame, false, "Debug: resets Opacity Micromap runtime data every frame. ");
+    // [nfs2se 0010]
+    RTX_OPTION("rtx.opacityMicromap", bool, targetedRebind, true, "A newly built Opacity Micromap rebuilds only the merged BLAS buckets with an instance that can bind it, instead of every bucket; and the micromaps bound into cached buckets are kept in use so the LRU never evicts one a reused BLAS still references.");
 
 
     struct Cache {
@@ -443,6 +445,14 @@ namespace dxvk {
     // meaning affected BLASes should be rebuilt to bind them.
     bool hasNewlyBuiltOmms() const { return m_hasNewlyBuiltOmms; }
 
+    // [nfs2se 0010] rtx.opacityMicromap.targetedRebind; the source hashes of the OMMs that reached the Built state this frame.
+    static bool targetedRebind();
+    const std::vector<XXH64_hash_t>& getNewlyBuiltOmmHashes() const { return m_newlyBuiltOmmHashes; }
+
+    // [nfs2se 0010] Marks a cached OMM as used this frame (LRU) and keeps its buffers alive for this frame's command
+    // list, for a BLAS that was built with it and is reused without a re-bind. False when the OMM is gone.
+    bool touchOpacityMicromap(Rc<DxvkContext> ctx, XXH64_hash_t ommSrcHash);
+
     // Returns true if OMM option changes require all BLASes to be rebuilt
     // (e.g. binding or building options toggled).  Cleared after reading.
     bool consumeNeedsBlasRebuild() {
@@ -612,6 +622,7 @@ namespace dxvk {
     // the Built state.  The accel manager uses this to force a scene rebuild so
     // the newly-built OMMs get bound to BLASes.
     bool m_hasNewlyBuiltOmms = false;
+    std::vector<XXH64_hash_t> m_newlyBuiltOmmHashes; // [nfs2se 0010]
 
     // Set when OMM option changes require all BLASes to be rebuilt.
     bool m_needsBlasRebuild = false;
