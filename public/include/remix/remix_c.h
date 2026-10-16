@@ -139,6 +139,8 @@ extern "C" {
     REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_PARTICLE_SYSTEM_EXT    = 26,
     REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_GPU_INSTANCING_EXT     = 27,
     REMIXAPI_STRUCT_TYPE_CAMERA_MEDIUM_INFO                   = 28,
+    // [nfs2se 0007] Far from the upstream range so a future upstream struct cannot collide with it.
+    REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_LIFETIME_EXT           = 0x4E460001,
     // NOTE: if adding a new struct, register it in 'rtx_remix_specialization.inl'
     //       and only extend this enum by appending, never adjust the order of these 
     //       as that will break backwards compatibility.
@@ -586,6 +588,17 @@ extern "C" {
     const remixapi_Transform* instanceTransforms_values;
     uint32_t                  instanceTransforms_count;
   } remixapi_InstanceInfoGpuInstancingEXT;
+
+  // [nfs2se 0007] How long the instance outlives its last DrawInstance. Remix keeps an instance that is not drawn
+  // again for rtx.numFramesToKeepInstances frames at its last pose; framesToKeep overrides that keep for this one
+  // instance (1 = gone in the first frame it is not drawn; 0 = the global option). An instance with an explicit
+  // keep is never kept alive by object/light anti-culling. A host probes support by setting the option
+  // rtx.capiInstanceLifetimeExt (a runtime without this extension ignores the struct silently).
+  typedef struct remixapi_InstanceInfoLifetimeEXT {
+    remixapi_StructType       sType;
+    void*                     pNext;
+    uint32_t                  framesToKeep;
+  } remixapi_InstanceInfoLifetimeEXT;
 
   typedef struct remixapi_InstanceInfo {
     remixapi_StructType            sType;

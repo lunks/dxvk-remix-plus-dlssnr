@@ -111,6 +111,8 @@ struct ExternalDrawState {
   bool doubleSided {};
   std::optional<RtxParticleSystemDesc> optionalParticleDesc {};
   std::vector<Matrix4> gpuInstancingTransforms {};
+  // [nfs2se 0007] remixapi_InstanceInfoLifetimeEXT::framesToKeep (0 = rtx.numFramesToKeepInstances).
+  uint32_t framesToKeep = 0;
 
   // Draw-instance identity for ReplacementInstance lookup. Excludes per-frame camera matrices
   // (worldToView / viewToProjection / objectToView) filled in submitExternalDraw after hashing.
