@@ -1168,6 +1168,7 @@ namespace dxvk {
         if (hasTransformChanged) {
           notifySceneChanged();
           currentInstance.m_blasDirty = true;
+          blas.hasMovingInstance = true; // [nfs2se 0009]
         }
 
         currentInstance.surface.textureTransform = drawCall.getTransformData().textureTransform;

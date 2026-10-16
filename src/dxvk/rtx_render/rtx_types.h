@@ -952,6 +952,11 @@ struct BlasEntry {
 
   Rc<PooledBlas> dynamicBlas = nullptr;
 
+  // [nfs2se 0009] Set (and never cleared) when an instance of this geometry changed its transform between two
+  // frames; with rtx.splitMergedBlasChurn the geometry then gets its own BLAS. Mutable: set from updateInstance,
+  // which sees the entry as const.
+  mutable bool hasMovingInstance = false;
+
   std::vector<VkAccelerationStructureGeometryKHR> buildGeometries;
   std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRanges;
 

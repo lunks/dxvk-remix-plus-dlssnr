@@ -501,6 +501,8 @@ namespace dxvk {
     RTX_OPTION("rtx", uint32_t, minPrimsInDynamicBLAS, 1000, "The minimum number of triangles required to promote a mesh to it's own BLAS, otherwise it lands in the merged BLAS with multiple other meshes.");
     RTX_OPTION("rtx", uint32_t, maxPrimsInMergedBLAS, 50000, "The maximum number of triangles for a mesh that can be in the merged BLAS.  ");
     RTX_OPTION_FLAG("rtx", bool, forceMergeAllMeshes, false, RtxOptionFlags::NoSave, "Force merges all meshes into as few BLAS as possible.  This is generally not desirable for performance, but can be a useful debugging tool.");
+    // [nfs2se 0009]
+    RTX_OPTION("rtx", bool, splitMergedBlasChurn, true, "Keeps churn out of the merged BLAS so its static members are not rebuilt every frame: a mesh whose instance has moved gets its own BLAS (the TLAS carries the motion, nothing is rebuilt), and instances that are new or changed this frame go to a separate merged bucket from the unchanged members of rebuilt buckets.");
     RTX_OPTION_FLAG("rtx", bool, minimizeBlasMerging, false, RtxOptionFlags::NoSave, "Minimize BLAS merging to the minimum possible, this option tries to give all meshes their own BLAS.  This is generally not desirable forperformance, but can be a useful debugging tool.");
 
     RTX_OPTION_ENV("rtx", bool, enableAlwaysCalculateAABB, false, "RTX_ALWAYS_CALCULATE_AABB", "Calculate an Axis Aligned Bounding Box for every draw call.\n This may improve instance tracking across frames for skinned and vertex shaded calls.");
