@@ -31,6 +31,7 @@
 #include "rtx_shader_manager.h"
 #include "dxvk_adapter.h"
 #include "rtx_context.h"
+#include "rtx_fork_gpu_timer.h" // [nfs2se 0015]
 #include "rtx_asset_exporter.h"
 #include "rtx_options.h"
 #include "rtx_bindless_resource_manager.h"
@@ -657,10 +658,24 @@ namespace dxvk {
       // consumes this frame's spawn contexts.
       fork_hooks::submitPrecipitation(*this);
 
+      // [nfs2se 0015] GPU time per stage of the ray-traced frame (rtx.nfs2seGpuTimers): one "[nfs2se-gpu] rtx" line per 600 frames.
+      static Nfs2seGpuTimer s_nfs2seGpuTimer("rtx", { "scene", "volumetrics", "pathtrace", "nrc_rtxdi_restirgi", "demod_denoise",
+                                                      "composite_picking", "upscale", "post_debug", "dlfg_blit" });
+      const bool nfs2seGpuTimers = RtxOptions::nfs2seGpuTimers();
+      if (nfs2seGpuTimers) {
+        s_nfs2seGpuTimer.beginFrame(m_device.ptr(), getCmdBuffer(DxvkCmdBuffer::ExecBuffer));
+      }
+
       // Update all the GPU buffers needed to describe the scene
       getSceneManager().prepareSceneData(this, m_execBarriers);
-      
+      if (nfs2seGpuTimers) {
+        s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 1);
+      }
+
       // If we really don't have any RT to do, just bail early (could be UI/menus rendering)
+      if (getSceneManager().getSurfaceBuffer() == nullptr && nfs2seGpuTimers) {
+        s_nfs2seGpuTimer.abortFrame();
+      }
       if (getSceneManager().getSurfaceBuffer() != nullptr) {
 
         VkExtent3D downscaledExtent = onInjectRtxFrameBegin(targetImage->info().extent);
@@ -682,9 +697,11 @@ namespace dxvk {
 
         // Volumetric Lighting
         dispatchVolumetrics(rtOutput);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 2); } // [nfs2se 0015]
         
         // Path Tracing
         dispatchPathTracing(rtOutput);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 3); } // [nfs2se 0015]
 
         // Neural Radiance Cache
         m_common->metaNeuralRadianceCache().dispatchTrainingAndResolve(*this, rtOutput);
@@ -694,6 +711,7 @@ namespace dxvk {
 
         // ReSTIR GI
         m_common->metaReSTIRGIRayQuery().dispatch(this, rtOutput);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 4); } // [nfs2se 0015]
         
         if (captureScreenImage && captureDebugImage) {
           takeScreenshot("baseReflectivity", rtOutput.m_primaryBaseReflectivity.image(Resources::AccessType::Read));
@@ -712,6 +730,7 @@ namespace dxvk {
 
         // Denoising
         dispatchDenoise(rtOutput);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 5); } // [nfs2se 0015]
 
         // Note: Primary direct diffuse/specular radiance textures denoised but in a still demodulated state after denoising step.
         if (captureScreenImage && captureDebugImage) {
@@ -731,6 +750,7 @@ namespace dxvk {
 
         getCommonObjects()->getTextureManager().copySamplerFeedbackToHost(this);
         dispatchObjectPicking(rtOutput, downscaledExtent, targetImage->info().extent);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 6); } // [nfs2se 0015]
 
         // Upscaling if DLSS/NIS enabled, or the Composition Pass will do upscaling
         if (m_currentUpscaler == InternalUpscaler::DLSS) {
@@ -763,6 +783,7 @@ namespace dxvk {
         }
         fork_hooks::dispatchRcasSharpening(*this, rtOutput);
         m_previousUpscaler = m_currentUpscaler;
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 7); } // [nfs2se 0015]
 
         RtxDustParticles& dust = m_common->metaDustParticles();
         dust.simulateAndDraw(this, m_state, rtOutput);
@@ -806,6 +827,7 @@ namespace dxvk {
 
         // Debug view
         dispatchDebugView(srcImage, rtOutput, captureScreenImage);
+        if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 8); } // [nfs2se 0015]
 
         dispatchDLFG();
 
@@ -820,6 +842,10 @@ namespace dxvk {
           // so we can use the same blit with nearest neighbor filtering
           assert(srcImage->info().extent == targetImage->info().extent);
           blitImageHelper(this, srcImage, targetImage, VkFilter::VK_FILTER_NEAREST);
+        }
+        if (nfs2seGpuTimers) { // [nfs2se 0015]
+          s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 9);
+          s_nfs2seGpuTimer.endFrame();
         }
 
         // Log stats when an image is taken

@@ -1,5 +1,6 @@
 #include "dxvk_device.h"
 #include "rtx_dlfg.h"
+#include "rtx_fork_gpu_timer.h" // [nfs2se 0015]
 
 #include <cstdio>
 
@@ -1327,6 +1328,12 @@ namespace dxvk {
     commandList->trackResource<DxvkAccess::Read>(primaryScreenSpaceMotionVector);
     commandList->trackResource<DxvkAccess::Read>(primaryDepth);
 
+    // [nfs2se 0015] GPU time of the frame-generation evaluate on the DLFG queue: one "[nfs2se-gpu] dlfg" line per 600 evaluates.
+    static Nfs2seGpuTimer s_nfs2seGpuTimerFg("dlfg", { "evaluate" });
+    const bool nfs2seGpuTimers = RtxOptions::nfs2seGpuTimers();
+    if (nfs2seGpuTimers) {
+      s_nfs2seGpuTimerFg.beginFrame(m_device, commandList->getCmdBuffer());
+    }
     {
       ScopedGpuProfileZone_Present(m_device, commandList->getCmdBuffer(), "DLFG evaluate");
 
@@ -1353,6 +1360,10 @@ namespace dxvk {
       case NGXDLFGContext::EvaluateResult::Success:
         break;
       }
+    }
+    if (nfs2seGpuTimers) { // [nfs2se 0015]
+      s_nfs2seGpuTimerFg.mark(commandList->getCmdBuffer(), 1);
+      s_nfs2seGpuTimerFg.endFrame();
     }
   }
 
