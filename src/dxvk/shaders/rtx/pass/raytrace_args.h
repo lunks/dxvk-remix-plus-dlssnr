@@ -436,6 +436,8 @@ struct RaytraceArgs {
   float raytracedRenderTargetScreenRectX1;
   float raytracedRenderTargetScreenRectY1;
   uint raytracedRenderTargetDiscardHistory;
+  // [nfs2se 0014] rtx.raytracedRenderTarget.opaqueScreen: no pass-through ray behind a render-target screen.
+  uint raytracedRenderTargetOpaqueScreen;
 
   // NOTE: Add structs to the top section of RaytraceArgs, not the bottom.
   // NOTE: bool does not work in debug builds, use uint instead.

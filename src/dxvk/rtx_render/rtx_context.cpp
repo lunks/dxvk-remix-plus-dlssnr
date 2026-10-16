@@ -1111,6 +1111,7 @@ namespace dxvk {
       constants.raytracedRenderTargetScreenRectX1 = screenRect.z;
       constants.raytracedRenderTargetScreenRectY1 = screenRect.w;
       constants.raytracedRenderTargetDiscardHistory = RtxOptions::RaytracedRenderTarget::discardHistory() ? 1u : 0u;
+      constants.raytracedRenderTargetOpaqueScreen = RtxOptions::RaytracedRenderTarget::opaqueScreen() ? 1u : 0u; // [nfs2se 0014]
     }
     const CameraManager& cameraManager = getSceneManager().getCameraManager();
 

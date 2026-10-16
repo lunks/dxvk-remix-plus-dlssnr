@@ -452,6 +452,10 @@ namespace dxvk {
       RTX_OPTION("rtx.raytracedRenderTarget", bool, discardHistory, false,
                  "If true, the pixels seen through a raytraced render target never reuse the previous frame's denoiser/upscaler history (the alternate disocclusion threshold is forced: DLSS-RR discards its history there). "
                  "Noisier but cannot ghost. An alternative to rtx.raytracedRenderTarget.screenRect.");
+      // [nfs2se 0014]
+      RTX_OPTION("rtx.raytracedRenderTarget", bool, opaqueScreen, false,
+                 "If true, a surface that shows a raytraced render target (the screen) is opaque: only the render target's picture is seen there, no ray passes through the screen to what lies behind it "
+                 "(the pass-through lobe is not traced). False (default) keeps Remix's screen, which also shows what is behind it.");
     } raytracedRenderTarget;
 
     struct ViewModel {

@@ -2174,15 +2174,26 @@ void geometryResolverVertex(
       PrimaryDisocclusionThresholdMix[geometryResolverState.pixelCoordinate] = 1.0f;
     }
 
+    // [nfs2se 0014] The rays that leave the screen (the render target camera's ray and the pass-through ray) see the scene, not the
+    // view-model layer: a screen drawn as view-model geometry (glued to the camera, with its backing plate) must not see itself
+    // through the render target camera. Without this they inherited isViewModel from the screen hit and kept the view-model mask bits.
     GeometryFlags geometryFlags = (GeometryFlags)0;
-    geometryFlags.isViewModel = geometryResolverState.isViewModelSurface;
+    geometryFlags.isViewModel = false;
     geometryFlags.portalSpace = geometryResolverState.portalSpace;
     geometryFlags.secondarySurfaceMask = true;
-    geometryFlags.objectMask = primaryRayMaskToObjectMask(geometryResolverState.rayMask, geometryResolverState.isViewModelSurface);
+    geometryFlags.objectMask = primaryRayMaskToObjectMask(geometryResolverState.rayMask, false);
     const uint packedGeometryFlags = geometryFlagsEncode(geometryFlags);
-    
+
+    // [nfs2se 0014] rtx.raytracedRenderTarget.opaqueScreen: the render target's picture is the only lobe of the screen.
+    const bool screenPassThrough = cb.raytracedRenderTargetOpaqueScreen == 0;
+
     const float stochasticTheshold = 0.66f;
-    if (getNextSampleBlueNoise(randomState) < stochasticTheshold)
+    if (!screenPassThrough)
+    {
+      selectedIntegrationSurfacePdf = 1.f;
+      geometryResolverState.reflectionSelectedIntegrationSurface = false;
+    }
+    else if (getNextSampleBlueNoise(randomState) < stochasticTheshold)
     {
       selectedIntegrationSurfacePdf = stochasticTheshold;
       geometryResolverState.reflectionSelectedIntegrationSurface = false;
@@ -2209,6 +2220,7 @@ void geometryResolverVertex(
     }
 
     // ray that passes through the screen (replacing transmission)
+    if (screenPassThrough)
     {
       geometryResolverState.performPSRR = true;
       Ray newRay = rayCreateDirection(
@@ -2828,8 +2840,13 @@ void geometryPSRResolverVertex(
   // Handle PSR continuation or output a surface otherwise
 
   // If the camera index changed then create a new ray and return
+  // [nfs2se 0014] Set when this hit is a screen whose ray continues through the render target camera: the continuation sees the scene, not the view-model layer.
+  bool redirectedThroughScreen = false;
   if (GBUFFER_FEATURE_RAYTRACED_RENDER_TARGET && cb.enableRaytracedRenderTarget && isRaytracedRenderTarget && geometryPSRResolverState.bounceIteration < cb.psrrMaxBounces)
   {
+    redirectedThroughScreen = true;
+    geometryPSRResolverState.isViewModelSurface = false;
+    geometryPSRResolverState.rayMask &= ~OBJECT_MASK_ALL_VIEWMODEL;
     Ray newRay = rayCreateRenderTarget(cb.renderTargetCamera, surfaceInteraction.textureCoordinates, ray);
     geometryPSRResolverState.origin = newRay.origin;
     geometryPSRResolverState.direction = newRay.direction;
@@ -2907,7 +2924,7 @@ void geometryPSRResolverVertex(
     SharedRadianceB[geometryPSRResolverState.pixelCoordinate] = geometryPSRResolverState.radiance.b;
   }
 
-  if (rayInteraction.isViewModel)
+  if (rayInteraction.isViewModel && !redirectedThroughScreen) // [nfs2se 0014]
   {
     geometryPSRResolverState.isViewModelSurface = true;
   }
