@@ -22,6 +22,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -315,6 +316,12 @@ namespace dxvk {
       // Stop all the worker threads
       m_stopWork = true;
 
+      // [nfs2se 0016] wake the low-latency workers that went to sleep after an idle spell
+      {
+        std::unique_lock<dxvk::mutex> lock(m_idleMutex);
+        m_idleCond.notify_all();
+      }
+
       if constexpr (!LowLatency) {
         std::unique_lock<TaskMutex> lock(m_taskMutex);
         m_condOnAdd.notify_all();
@@ -376,6 +383,15 @@ namespace dxvk {
         }
 
         ++m_numTasks;
+
+        // [nfs2se 0016] A low-latency worker that has been idle for kIdleSpinBeforeSleep sleeps on m_idleCond: wake it.
+        // The hot path (workers spinning) costs one atomic load; the lock is taken only when someone sleeps.
+        if constexpr (LowLatency) {
+          if (m_idleSleepers.load() > 0) {
+            std::unique_lock<dxvk::mutex> lock(m_idleMutex);
+            m_idleCond.notify_all();
+          }
+        }
       }
 
       return future;
@@ -383,6 +399,10 @@ namespace dxvk {
 
   private:
     void processWork(const uint32_t workerId) {
+      // [nfs2se 0016] Low-latency mode used to spin in yield() forever while there was no work (a core per worker at 100 %
+      // between frames). Now it spins for kIdleSpinBeforeSleep after its last task, then blocks until Schedule() adds work.
+      bool idle = false;
+      std::chrono::steady_clock::time_point idleSince;
       while (true) {
         // Using a conditional wait in high-latency mode
         if constexpr (!LowLatency) {
@@ -398,8 +418,10 @@ namespace dxvk {
         }
 
         // Try executing a task from our queue
-        if (executeTask(workerId))
+        if (executeTask(workerId)) {
+          idle = false; // [nfs2se 0016]
           continue;
+        }
 
         if (WorkStealing) {
           // There's no work to do!
@@ -415,10 +437,42 @@ namespace dxvk {
 
           // If nothing to steal, yield this thread
           if (!workStolen && LowLatency) {
+            if (idleSleep(idle, idleSince)) {
+              continue;
+            }
+            std::this_thread::yield();
+          } else {
+            idle = false;
+          }
+        } else if (LowLatency) {
+          if (!idleSleep(idle, idleSince)) {
             std::this_thread::yield();
           }
         }
       }
+    }
+
+    // [nfs2se 0016] Returns true when the worker slept (it has been woken: re-check the queues), false to keep spinning.
+    bool idleSleep(bool& idle, std::chrono::steady_clock::time_point& idleSince) {
+      const auto now = std::chrono::steady_clock::now();
+      if (!idle) {
+        idle = true;
+        idleSince = now;
+        return false;
+      }
+      if (now - idleSince < kIdleSpinBeforeSleep) {
+        return false;
+      }
+      {
+        std::unique_lock<dxvk::mutex> lock(m_idleMutex);
+        ++m_idleSleepers;
+        m_idleCond.wait(lock, [this] {
+          return m_numTasks.load() > 0 || m_stopWork.load();
+        });
+        --m_idleSleepers;
+      }
+      idle = false;
+      return true;
     }
 
     // True if front pop, False if back pop
@@ -471,5 +525,11 @@ namespace dxvk {
     //  2. Use of mutex, and CVs, incur overhead thats unacceptable
     std::vector<QueuePtr> m_workerTasks;
     std::atomic_uint32_t m_numTasks;
+
+    // [nfs2se 0016] the idle sleep of low-latency workers
+    static constexpr std::chrono::microseconds kIdleSpinBeforeSleep { 1000 };
+    std::atomic_uint32_t m_idleSleepers { 0 };
+    dxvk::mutex m_idleMutex;
+    dxvk::condition_variable m_idleCond;
   };
 } //dxvk

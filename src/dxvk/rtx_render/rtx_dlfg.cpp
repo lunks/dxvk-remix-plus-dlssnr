@@ -1016,6 +1016,16 @@ namespace dxvk {
               const int64_t targetQpcPresentTicks = gpuTicksToQpc(dlfgTimestamp + deltaGpuPresentTicks * (frameIndex+1));
 
               ScopedCpuProfileZoneN("DLFG pacer: sleep");
+              // [nfs2se 0016] Sleep the bulk of the wait in the OS and spin only the last kSpinMarginMs: the pure _mm_pause spin
+              // kept this thread at ~50 % of a core (half of every frame). Sleep() wakes up to ~1 ms late, so the margin keeps the
+              // present on time.
+              {
+                constexpr double kSpinMarginMs = 2.0;
+                const double remainingMs = nsToMs(qpcTicksToNs(targetQpcPresentTicks - high_resolution_clock::getCounter()));
+                if (remainingMs > kSpinMarginMs + 1.0) {
+                  ::Sleep(DWORD(remainingMs - kSpinMarginMs));
+                }
+              }
               while (high_resolution_clock::getCounter() < targetQpcPresentTicks) {
                 _mm_pause();
               }
