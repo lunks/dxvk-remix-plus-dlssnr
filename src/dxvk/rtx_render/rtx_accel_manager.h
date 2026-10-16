@@ -89,7 +89,8 @@ class AccelManager : public CommonDeviceObject {
              customIndexFlags == other.customIndexFlags &&
              instanceFlags == other.instanceFlags &&
              usesUnorderedApproximations == other.usesUnorderedApproximations &&
-             isSubsurface == other.isSubsurface;
+             isSubsurface == other.isSubsurface &&
+             pad == other.pad; // [nfs2se 0009] pad carries the "new or changed this frame" split
     }
   };
 

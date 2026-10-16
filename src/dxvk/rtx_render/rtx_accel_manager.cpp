@@ -735,7 +735,20 @@ namespace dxvk {
                                     RtxOptions::forceMergeAllMeshes()) &&                                          // Setting to force all meshes into the merged BLAS
                                       instance->surface.instancesToObject == nullptr;                              // Never merge point instancer geometry
 
-      if (requestDynamicBlas && !forceMergedBlas) {
+      // [nfs2se 0009] A merged BLAS bakes its members' transforms, so one moving member rebuilds the whole bucket every
+      // frame, and every bucket that is rebuilt in that frame joins it. A geometry whose instance has moved gets its own
+      // BLAS instead (built once; the TLAS instance carries the motion).
+      const bool splitChurn = RtxOptions::splitMergedBlasChurn() && !RtxOptions::forceMergeAllMeshes();
+      const bool moverToDynamic = splitChurn && blasEntry->hasMovingInstance &&
+                                  blasEntry->buildGeometries.size() == 1;
+
+      if ((requestDynamicBlas && !forceMergedBlas) || moverToDynamic) {
+        // [nfs2se 0009] A geometry that was merged before carries the merged path's transform address in its cached build
+        // geometry; a dynamic BLAS is built in object space (the TLAS applies the transform).
+        for (auto& geometry : blasEntry->buildGeometries) {
+          geometry.geometry.triangles.transformData.deviceAddress = 0;
+        }
+
         // Since this loop is iterating over instances, and instances can share BLAS, we will build these later after identifying unique ones.
         auto uniqueBlasIter = m_uniqueDynamicBlasIndex.find(blasEntry);
         if (uniqueBlasIter == m_uniqueDynamicBlasIndex.end()) {
@@ -779,6 +792,9 @@ namespace dxvk {
         bucketKey.instanceFlags = instance->getVkInstance().flags;
         bucketKey.usesUnorderedApproximations = instance->usesUnorderedApproximations();
         bucketKey.isSubsurface = instance->isSubsurface();
+        // [nfs2se 0009] New or changed instances (new geometry every frame, e.g. a host's per-frame meshes) do not share
+        // a bucket with the unchanged members of rebuilt buckets, or those members would be rebuilt again next frame.
+        bucketKey.pad = static_cast<uint8_t>((splitChurn && (instance->isBlasDirty() || blasGeometryChanged)) ? 1 : 0);
 
         bool merged = false;
         auto bucketIt = bucketMap.find(bucketKey);
