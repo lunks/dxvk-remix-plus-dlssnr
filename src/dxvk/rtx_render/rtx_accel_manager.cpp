@@ -88,8 +88,15 @@ namespace dxvk {
       return;
     }
 
-    m_cachedBuckets.clear();
-    m_instanceBucketIndex.clear();
+    // [nfs2se 0012] Dropping the whole bucket cache whenever ONE cached instance dies made every frame in which any
+    // merged instance was destroyed (a host's per-frame meshes, a chunk leaving the view) rebuild every merged BLAS from
+    // scratch. The incremental path already validates each cached member against the live instance set (and its cache
+    // identity, for a reused address) before it dereferences it, and marks only that bucket dirty; forcing the
+    // incremental path (no full-skip with a dead pointer in m_reorderedSurfaces) is all the removal needs.
+    if (!RtxOptions::keepBucketCacheOnInstanceRemoval()) {
+      m_cachedBuckets.clear();
+      m_instanceBucketIndex.clear();
+    }
     m_lastProcessedGeneration = UINT64_MAX;
   }
 

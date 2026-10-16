@@ -742,6 +742,8 @@ namespace dxvk {
                "This affects how many Decals, Ray Portals and potentially particles (if unordered approximations are not enabled) may be interacted with along a ray at the cost of performance for higher amounts of interactions.\n"
                "This value is recommended to be set lower than the primary/PSR max ray interactions as secondary ray interactions are less visually relevant relative to the performance cost of resolving them.",
                args.minValue = static_cast<uint8_t>(1), args.maxValue = std::numeric_limits<uint8_t>::max());
+    // [nfs2se 0012]
+    RTX_OPTION("rtx", bool, keepBucketCacheOnInstanceRemoval, true, "When an instance of a cached merged BLAS bucket is destroyed, only that bucket is rebuilt (the incremental path validates every cached member against the live instance set) instead of dropping the whole bucket cache, which rebuilt every merged BLAS in any frame that destroyed one merged instance.");
     RTX_OPTION_ARGS("rtx", bool, enableSeparateUnorderedApproximations, true,
                "Use a separate loop during resolving for surfaces which can have lighting evaluated in an approximate unordered way on each path segment (such as particles).\n"
                "This improves performance typically in how particles or decals are rendered and should usually always be enabled.\n"
