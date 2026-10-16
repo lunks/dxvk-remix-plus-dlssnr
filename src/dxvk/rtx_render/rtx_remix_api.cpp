@@ -957,6 +957,10 @@ std::unique_ptr<dxvk::ExternalDrawState> dxvk::RemixAPIPrivateAccessor::toRtDraw
     }
   }
 
+  if (auto extLifetime = pnext::find<remixapi_InstanceInfoLifetimeEXT>(&info)) {
+    state->framesToKeep = extLifetime->framesToKeep;
+  }
+
   state->mesh = info.mesh;
   state->cameraType = cameraType;
   state->categories = convert::toRtCategories(info.categoryFlags);

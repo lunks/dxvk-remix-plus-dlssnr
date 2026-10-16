@@ -384,7 +384,10 @@ namespace dxvk {
       const bool hasLights = replacementInstance->lightBoundingBox.isValid();
       const bool hasMeshes = replacementInstance->geometryBoundingBox.isValid();
 
-      if (replacementInstance->frameLastSeen + numFramesToKeepObjects <= currentFrame) {
+      // [nfs2se 0007] An API instance may carry its own keep (remixapi_InstanceInfoLifetimeEXT).
+      const uint32_t framesToKeep = replacementInstance->framesToKeep != 0
+          ? replacementInstance->framesToKeep : numFramesToKeepObjects;
+      if (replacementInstance->frameLastSeen + framesToKeep <= currentFrame) {
         bool keepAlive = false;
 
         // Only anti-cull RIs that have been matched at least once after creation.
@@ -408,7 +411,8 @@ namespace dxvk {
               replacementInstance->isSkinned ||
               categories.test(InstanceCategories::ThirdPersonPlayerModel) ||
               categories.test(InstanceCategories::IgnoreAntiCulling) ||
-              wasMovingWhenLastSeen;
+              wasMovingWhenLastSeen ||
+              replacementInstance->framesToKeep != 0; // [nfs2se 0007] the host asked for this exact lifetime
 
           // Object anti-culling: keep objects that are OUTSIDE the camera frustum.
           // If the game stopped submitting an object that's clearly visible, it

@@ -2456,6 +2456,7 @@ namespace dxvk {
     const ReplacementInstance::LookupKey externalKey { identityHash, spatialMapHash, matHash, kEmptyHash, worldPos, xform };
     ReplacementInstance* replacementInstance = m_drawCallTracker.findOrCreateReplacementInstance(externalKey);
     replacementInstance->dirtyFlags.clr(ReplacementInstance::kDynamicFeatureMask);
+    replacementInstance->framesToKeep = state.framesToKeep; // [nfs2se 0007]
 
     if (std::vector<AssetReplacement>* pReplacements = fork_hooks::externalDrawMeshReplacement(*m_pReplacer, meshHash)) {
       // [nfs2se capi-fix] Bookkeeping the D3D9 branch (submitDrawState, lines ~737-766) does around

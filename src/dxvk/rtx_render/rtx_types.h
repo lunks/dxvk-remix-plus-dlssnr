@@ -213,6 +213,9 @@ struct ReplacementInstance {
   // Stored as raw bits because CategoryFlags is defined later in this file.
   uint32_t categoryFlags = 0;
   bool isSkinned = false;
+  // [nfs2se 0007] Keep of this RI when it is not drawn, from the API's remixapi_InstanceInfoLifetimeEXT
+  // (0 = rtx.numFramesToKeepInstances). Set by every external draw that matches the RI.
+  uint32_t framesToKeep = 0;
 
   // When true, the aggregate object-space bounding boxes (geometryBoundingBox,
   // lightBoundingBox) will be recomputed from the replacement mesh/light data
