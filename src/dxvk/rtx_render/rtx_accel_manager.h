@@ -296,6 +296,24 @@ private:
 
   void resetUniqueDynamicBlasGroups();
 
+  // [nfs2se 0011] What the BLAS stage did, summed over a window and printed as one "[nfs2se-accel]" log line
+  // every 600 frames: merged buckets / triangles (re)built, cached buckets reused, dynamic BLAS built or updated.
+  // Diagnostic only; nothing reads it back.
+  struct Nfs2seAccelStats {
+    uint64_t frames = 0;
+    uint64_t skipFrames = 0;          // full-skip fast path (scene unchanged)
+    uint64_t ommAllDirtyFrames = 0;   // every cached bucket forced dirty by a pending OMM binding
+    uint64_t mergedBuckets = 0;       // merged buckets built
+    uint64_t mergedPrims = 0;         // triangles in those builds
+    uint64_t restoredBuckets = 0;     // cached merged buckets reused (all of them on a fast-path frame)
+    uint64_t restoredSurfaces = 0;    // surfaces in the buckets reused on the incremental path
+    uint64_t dynBuilds = 0;           // dynamic BLAS built or updated
+    uint64_t dynPrims = 0;            // triangles in those builds
+    uint64_t dynActive = 0;           // dynamic BLAS in the TLAS (summed per frame)
+  };
+  Nfs2seAccelStats m_nfs2seStats;
+  void nfs2seCountFrame();
+
   Rc<DxvkBuffer> m_vkInstanceBuffer; // Note: Holds Vulkan AS Instances, not RtInstances
   Rc<DxvkBuffer> m_surfaceBuffer;
   Rc<DxvkBuffer> m_surfaceMappingBuffer;

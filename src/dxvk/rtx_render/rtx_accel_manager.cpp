@@ -431,6 +431,21 @@ namespace dxvk {
     execBarriers.recordCommands(cb);
   }
 
+  void AccelManager::nfs2seCountFrame() {
+    constexpr uint64_t kNfs2seStatsWindow = 600;
+    Nfs2seAccelStats& s = m_nfs2seStats;
+    if (++s.frames < kNfs2seStatsWindow) {
+      return;
+    }
+    const double n = double(s.frames);
+    Logger::info(str::format("[nfs2se-accel] frames=", s.frames,
+      " skip=", s.skipFrames, " omm_all_dirty=", s.ommAllDirtyFrames,
+      " | per frame: merged_built=", s.mergedBuckets / n, " merged_built_tris=", s.mergedPrims / n,
+      " merged_reused=", s.restoredBuckets / n, " reused_surfaces=", s.restoredSurfaces / n,
+      " dyn_built=", s.dynBuilds / n, " dyn_built_tris=", s.dynPrims / n, " dyn_blas=", s.dynActive / n));
+    s = Nfs2seAccelStats {};
+  }
+
   void AccelManager::mergeInstancesIntoBlas(Rc<DxvkContext> ctx, 
                                             DxvkBarrierSet& execBarriers, 
                                             const std::vector<TextureRef>& textures,
@@ -470,6 +485,10 @@ namespace dxvk {
 
       if (sceneUnchanged && !m_ommBindPending && !m_reorderedSurfaces.empty()) {
         m_sceneUnchangedThisFrame = true;
+        m_nfs2seStats.skipFrames++; // [nfs2se 0011]
+        m_nfs2seStats.restoredBuckets += m_cachedBuckets.size();
+        m_nfs2seStats.dynActive += m_activeDynamicBlases.size();
+        nfs2seCountFrame();
         // Touch pooled (merged) BLAS
         for (auto& blas : m_blasPool) {
           blas->frameLastTouched = currentFrame;
@@ -531,6 +550,7 @@ namespace dxvk {
       // When newly built OMMs need binding, force all buckets dirty so that
       // tryBindOpacityMicromap runs on every instance's BLAS rebuild.
       if (m_ommBindPending) {
+        m_nfs2seStats.ommAllDirtyFrames++; // [nfs2se 0011]
         bucketDirty.resize(m_cachedBuckets.size(), true);
         anyBucketDirty = true;
         m_ommBindPending = false;
@@ -937,6 +957,8 @@ namespace dxvk {
       blasEntry->dynamicBlas->opacityMicromapSourceHash = boundOpacityMicromapHash;
 
       if (update || build) {
+        m_nfs2seStats.dynBuilds++; // [nfs2se 0011]
+        m_nfs2seStats.dynPrims += blasEntry->buildRanges[0].primitiveCount;
         if (update && !build) {
           buildInfo.srcAccelerationStructure = selectedBlas->accelStructure->getAccelStructure();
           buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
@@ -1008,6 +1030,8 @@ namespace dxvk {
           continue; // Dirty bucket — its instances went through the normal pipeline above
         }
         auto& cached = m_cachedBuckets[bi];
+        m_nfs2seStats.restoredBuckets++; // [nfs2se 0011]
+        m_nfs2seStats.restoredSurfaces += cached.surfaces.size();
 
         // Restore surfaces from this clean bucket
         const uint32_t surfaceOffset = static_cast<uint32_t>(m_reorderedSurfaces.size());
@@ -1038,6 +1062,10 @@ namespace dxvk {
 
     // Collect surfaces from newly-built (dirty) buckets
     for (const auto& blasBucket : blasBuckets) {
+      m_nfs2seStats.mergedBuckets++; // [nfs2se 0011]
+      for (uint32_t primitiveCount : blasBucket->primitiveCounts) {
+        m_nfs2seStats.mergedPrims += primitiveCount;
+      }
       blasBucket->reorderedSurfacesOffset = static_cast<uint32_t>(m_reorderedSurfaces.size());
       m_reorderedSurfaces.insert(m_reorderedSurfaces.end(), blasBucket->originalInstances.begin(), blasBucket->originalInstances.end());
       m_reorderedSurfacesFirstIndexOffset.insert(m_reorderedSurfacesFirstIndexOffset.end(), blasBucket->indexOffsets.begin(), blasBucket->indexOffsets.end());
@@ -1091,6 +1119,9 @@ namespace dxvk {
     for (int t = 0; t < Tlas::Count; ++t) {
       m_mergedInstancesBaselineCount[t] = m_mergedInstances[t].size();
     }
+
+    m_nfs2seStats.dynActive += m_activeDynamicBlases.size(); // [nfs2se 0011]
+    nfs2seCountFrame();
 
     // --- Cache per-bucket state for future incremental rebuilds ---
     // Rebuild the cached bucket list: keep clean buckets as-is, replace dirty
