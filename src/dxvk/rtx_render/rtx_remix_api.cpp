@@ -896,6 +896,10 @@ std::unique_ptr<dxvk::ExternalDrawState> dxvk::RemixAPIPrivateAccessor::toRtDraw
     prototype.cameraType = cameraType;
     prototype.transformData.objectToWorld = convert::tomat4(info.transform);
     prototype.transformData.texgenMode = TexGenMode::None;
+    if (auto extPrev = pnext::find<remixapi_InstanceInfoPrevTransformEXT>(&info)) { // [nfs2se 0013]
+      prototype.transformData.hasPrevObjectToWorld = true;
+      prototype.transformData.prevObjectToWorld = convert::tomat4(extPrev->prevTransform);
+    }
     prototype.categories = convert::toRtCategories(info.categoryFlags);
   }
 

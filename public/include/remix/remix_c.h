@@ -144,6 +144,8 @@ extern "C" {
     // NOTE: if adding a new struct, register it in 'rtx_remix_specialization.inl'
     //       and only extend this enum by appending, never adjust the order of these 
     //       as that will break backwards compatibility.
+    // [nfs2se 0013] Far from the upstream range (0007 uses 0x4E460001).
+    REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_PREV_TRANSFORM_EXT     = 0x4E460002,
   } remixapi_StructType;
 
   typedef enum remixapi_ErrorCode {
@@ -611,6 +613,16 @@ extern "C" {
 
   typedef remixapi_ErrorCode(REMIXAPI_PTR* PFN_remixapi_DrawInstance)(
     const remixapi_InstanceInfo* info);
+
+  // [nfs2se 0013] The object-to-world of the PREVIOUS frame, for an instance Remix sees for the first time (a mesh
+  // re-created or swapped mid-motion). Without it a new instance starts "still" (prev = current), so its motion vectors
+  // are zero in its first frame while its neighbours move. Read only on the instance's first update; ignored after.
+  // A host probes support by setting the option rtx.capiInstancePrevTransformExt (an older runtime skips the struct).
+  typedef struct remixapi_InstanceInfoPrevTransformEXT {
+    remixapi_StructType       sType;
+    void*                     pNext;
+    remixapi_Transform        prevTransform;
+  } remixapi_InstanceInfoPrevTransformEXT;
 
 
   typedef struct remixapi_LightInfoLightShaping {

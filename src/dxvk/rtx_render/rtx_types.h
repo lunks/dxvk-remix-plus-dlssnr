@@ -598,6 +598,9 @@ struct DrawCallTransforms {
   Vector4 clipPlane{ 0.f };
   TexGenMode texgenMode = TexGenMode::None;
   std::shared_ptr<const std::vector<Matrix4>> instancesToObject;
+  // [nfs2se 0013] remixapi_InstanceInfoPrevTransformEXT: the previous frame's object-to-world for a new instance.
+  bool hasPrevObjectToWorld = false;
+  Matrix4 prevObjectToWorld = Matrix4();
 
   void sanitize() {
     if (objectToWorld[3][3] == 0.f) objectToWorld[3][3] = 1.f;
