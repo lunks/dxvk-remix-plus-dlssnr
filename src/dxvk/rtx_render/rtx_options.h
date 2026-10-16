@@ -543,6 +543,8 @@ namespace dxvk {
                "Only takes effect when rtx.enableNearPlaneOverride is enabled, see that option for more information about why this is useful.");
 
     RTX_OPTION("rtx", bool, useRayPortalVirtualInstanceMatching, true, "");
+    // [nfs2se 0015]
+    RTX_OPTION("rtx", bool, nfs2seGpuTimers, true, "Diagnostic: GPU timestamp queries at the stage boundaries of the ray-traced frame and around the frame-generation evaluate; one \"[nfs2se-gpu]\" log line per 600 frames with the milliseconds of each stage.");
     RTX_OPTION("rtx", bool, enablePortalFadeInEffect, false, "");
 
     RTX_OPTION_ENV("rtx", bool, useRTXDI, true, "DXVK_USE_RTXDI",
