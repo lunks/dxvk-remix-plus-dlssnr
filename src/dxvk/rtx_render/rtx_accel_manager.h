@@ -61,6 +61,7 @@ class AccelManager : public CommonDeviceObject {
     uint32_t reorderedSurfacesOffset = UINT32_MAX;
     bool hasOmmInstances = false;
     bool hasSssInstances = false;
+    std::vector<XXH64_hash_t> boundOmmHashes {}; // [nfs2se 0010] the OMMs bound into this bucket's build
 
     // The PooledBlas assigned to this bucket by createBlasBuffersAndInstances.
     // Stored here so the per-bucket cache can capture it after buildBlases.
@@ -242,6 +243,12 @@ private:
   // Set when newly built OMMs need to be bound to BLASes.  Forces all buckets
   // dirty on the next incremental rebuild so tryBindOpacityMicromap runs.
   bool m_ommBindPending = false;
+  // [nfs2se 0010] With rtx.opacityMicromap.targetedRebind, newly built OMMs set this instead of m_ommBindPending: only
+  // the cached buckets with an instance that can bind one of m_ommPendingHashes are dirtied. m_ommBindPending keeps its
+  // meaning (every bucket) for option changes, a disabled OMM manager and a lost OMM.
+  bool m_ommBindPendingTargeted = false;
+  std::unordered_set<XXH64_hash_t> m_ommPendingHashes;
+  void notePendingOmmBindings(const OpacityMicromapManager& opacityMicromapManager);
 
   // Number of non-billboard entries in m_mergedInstances per TLAS type.
   // prepareSceneData() truncates to this baseline before appending fresh billboard instances.
@@ -269,6 +276,7 @@ private:
     // Which TLAS type(s) this bucket was emitted to
     bool isUnordered = false;
     bool hasSssInstances = false;
+    std::vector<XXH64_hash_t> boundOmmHashes; // [nfs2se 0010]
   };
   std::vector<CachedBucketState> m_cachedBuckets;
 
