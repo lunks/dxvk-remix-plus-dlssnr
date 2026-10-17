@@ -672,6 +672,8 @@ struct AtmosphereArgs {
   // band centre inside the tint sector (weight exp(-(dAz / horizonTintHalfWidth)^2)
   // around horizonTintAzimuth). 0 = off. Rides the former 0018 pad.
   float horizonSectorShiftRad;
-  float cloudEarthShadowPad1;
+  // [nfs2se 0020] Sky-body zenith falloff exponent (0 = off): the atmosphere's
+  // own radiance is scaled by cos(view elevation)^k above the horizon. Rides 0018's pad.
+  float skyZenithFalloff;
   float cloudEarthShadowPad2;
 };

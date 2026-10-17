@@ -776,6 +776,12 @@ vec3 evalSkyRadiance(
     radiance *= atmosphereFade;
   }
 
+  // [nfs2se 0020] rtx.atmosphere.skyZenithFalloff: the sky body's light
+  // concentrated at the horizon (cos(elevation)^k above it). Off at 0.
+  if (args.skyZenithFalloff > 0.0f && viewDirYUp.y > 0.0f) {
+    radiance *= pow(saturate(length(viewDirYUp.xz)), args.skyZenithFalloff);
+  }
+
   // Add night-sky contribution split into two layers (fork):
   //   - airglow joins `radiance` (diffuse; standard alpha-composite with clouds).
   //   - stars are held aside and composited AFTER the cloud composite below

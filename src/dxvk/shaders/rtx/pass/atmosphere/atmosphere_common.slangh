@@ -745,6 +745,10 @@ vec3 sampleSkyAmbientForVolume(vec3 dirYUp,
   // independently of the overall sky-ambient strength. 1.0 = full cloud
   // occlusion (physical baseline); 0.0 = sky ambient ignores clouds.
   float cloudFactor = lerp(1.0f, cloudTrans, args.cloudSkyAmbientCloudOcclusionStrength);
+  // [nfs2se 0020] the same zenith falloff as the visible sky body (evalSkyRadiance).
+  if (args.skyZenithFalloff > 0.0f) {
+    skyRadiance *= pow(saturate(length(dirYUp.xz)), args.skyZenithFalloff);
+  }
   return skyRadiance * cloudFactor;
 }
 

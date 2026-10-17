@@ -1388,6 +1388,8 @@ namespace dxvk {
     RTX_OPTION("rtx.atmosphere", float, horizonTintHalfWidth, 45.0f, "[nfs2se 0017] Azimuth half-width in degrees of the sector: exp(-(d / halfWidth)^2).");
     RTX_OPTION("rtx.atmosphere", float, horizonTintHeight, 10.0f, "[nfs2se 0017] Angle in degrees over which the sector glow falls to 1/e above the horizon line.");
 
+    // [nfs2se 0020]
+    RTX_OPTION("rtx.atmosphere", float, skyZenithFalloff, 0.0f, "[nfs2se 0020] Exponent k of a falloff of the atmosphere's own radiance (the sky body, not clouds, stars or moons) with view elevation: x cos(elevation)^k above the horizon, the same factor in the sky ambient the clouds and sky-lit particles sample. Concentrates a dusk sky's light at the horizon and darkens the zenith. 0 = off (Numos unchanged).");
     // [nfs2se 0019]
     RTX_OPTION("rtx.atmosphere", float, horizonSectorShift, 0.0f, "[nfs2se 0019] Degrees added to the horizon line (horizonGroundElevation) and the band centre (horizonBandElevation) inside the tint sector (horizonTintAzimuth / horizonTintHalfWidth, weight exp(-(d/w)^2)), so a painted horizon can sit lower or higher at one heading. 0 = off (the same elevation all round). Independent of horizonTintStrength.");
     // [nfs2se 0018]
