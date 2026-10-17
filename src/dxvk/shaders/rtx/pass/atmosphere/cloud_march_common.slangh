@@ -591,7 +591,10 @@ vec3 cloudSunRadianceAtSample(vec3 samplePos, CloudShadeContext ctx, AtmosphereA
   float elevEff  = asin(sinLocal) + acos(clamp(cloudR / (cloudR + h), -1.0f, 1.0f));
   float sinEff   = sin(min(elevEff, 0.5f * kPi));
   vec3  effDir   = vec3(sqrt(saturate(1.0f - sinEff * sinEff)), sinEff, 0.0f);
-  float day      = smoothstep(-0.05f, 0.20f, sinEff);
+  // The sun's disc crossing the sample's horizon (+-0.3 deg penumbra) instead of
+  // the per-ray artistic dayFactor ramp (which dims a low sun to 10 % at its
+  // horizon): the low-sun dimming and reddening are the air-mass transmittance's.
+  float day      = smoothstep(-0.005f, 0.005f, sinEff);
   return args.sunIlluminance * getAtmosphericTransmittanceForDir(effDir, args) * day;
 }
 
