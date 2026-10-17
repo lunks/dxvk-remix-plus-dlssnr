@@ -441,6 +441,8 @@ namespace {
     args.horizonTintDirZ             = 0.0f;
     args.horizonTintHalfWidthRad     = 0.0f;
     args.horizonTintHeightRad        = 0.0f;
+    // [nfs2se 0018] cloud shading only (view march and secondary LUT), never a sky-view / transmittance bake.
+    args.cloudEarthShadow            = 0u;
     // Star / Milky Way fields feed ONLY runtime miss shading (evalNightSky /
     // evalStarField) — never any LUT bake. BUG FIX (fork — 2026-07-16, GT7
     // cross-audit): normalizeForSkyViewLutKey's comment always claimed these
@@ -664,6 +666,8 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   args.horizonTintDirZ           = std::cos(RtxOptions::horizonTintAzimuth() * kDegToRad);
   args.horizonTintHalfWidthRad   = std::max(RtxOptions::horizonTintHalfWidth(), 0.0f) * kDegToRad;
   args.horizonTintHeightRad      = std::max(RtxOptions::horizonTintHeight(), 0.0f) * kDegToRad;
+  // [nfs2se 0018]
+  args.cloudEarthShadow          = RtxOptions::cloudEarthShadow() ? 1u : 0u;
 
   // LUT dimensions
   args.transmittanceLutWidth = kTransmittanceLutWidth;

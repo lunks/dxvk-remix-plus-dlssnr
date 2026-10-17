@@ -574,6 +574,27 @@ CloudShadeContext buildCloudShadeContext(AtmosphereArgs args) {
   return ctx;
 }
 
+// [nfs2se 0018] rtx.atmosphere.cloudEarthShadow: the sun radiance reaching a
+// cloud sample as seen from the sample itself. Its own horizon is lower by the
+// dip of its altitude (acos(R / (R + h))) and tilted toward the sun by the
+// planet's curvature between camera and sample (both on the cloud planet the
+// slab geometry uses, cloudPlanetRadius), so after the camera's sunset the
+// high and distant clouds toward the sun keep a reddened, low-angle sun. Same
+// day gate and Kasten-Young air-mass transmittance as buildCloudShadeContext,
+// evaluated at that local elevation instead of the camera's.
+vec3 cloudSunRadianceAtSample(vec3 samplePos, CloudShadeContext ctx, AtmosphereArgs args) {
+  float cloudR   = cloudPlanetRadius(args);
+  vec3  c        = (samplePos - args.cameraWorldPosYUpKm) + vec3(0.0f, cloudR, 0.0f);
+  float r        = max(length(c), 1e-3f);
+  float h        = max(r - cloudR, 0.0f);
+  float sinLocal = clamp(dot(c / r, ctx.sunDirYUp), -1.0f, 1.0f);
+  float elevEff  = asin(sinLocal) + acos(clamp(cloudR / (cloudR + h), -1.0f, 1.0f));
+  float sinEff   = sin(min(elevEff, 0.5f * kPi));
+  vec3  effDir   = vec3(sqrt(saturate(1.0f - sinEff * sinEff)), sinEff, 0.0f);
+  float day      = smoothstep(-0.05f, 0.20f, sinEff);
+  return args.sunIlluminance * getAtmosphericTransmittanceForDir(effDir, args) * day;
+}
+
 // =============================================================================
 // Per-slab raymarch helper. Encapsulates everything that varies per cloud
 // layer when the slide-1 two-layer system is enabled: slab intersection,
@@ -748,9 +769,21 @@ bool integrateCloudSample(float tSampleKm,
                               args, /*isZUp=*/false);
   }
 
+  // [nfs2se 0018] Earth-shadow lighting: the sun as this sample sees it; with the
+  // sun below the camera's horizon the D_sun grid reads fully occluded (its bake
+  // gives up below the horizon), so the light from below is shadowed by the deck
+  // between the sample and the slab base instead.
+  vec3 sampleSunRadiance = ctx.sunRadiance;
+  if (args.cloudEarthShadow != 0u) {
+    sampleSunRadiance = cloudSunRadianceAtSample(samplePos, ctx, args);
+    if (ctx.sunDirYUp.y <= 0.01f) {
+      dSunOverride = hf * slabThicknessKm * slabDensityScale;
+    }
+  }
+
   NubisCubedLighting lighting = evalNubisCubedSampleCore(
       samplePos, density, nubisProfile, cloudSdfM, downTau, detailSigned,
-      viewDirYUp, ctx.sunDirYUp, ctx.sunRadiance,
+      viewDirYUp, ctx.sunDirYUp, sampleSunRadiance,
       ctx.skyRadianceWarm, ctx.skyRadianceCool, ctx.skyRadianceZenith,
       args, /*isZUp=*/false, dSunOverride);
 
@@ -1176,9 +1209,17 @@ void marchEchoDeck(vec3   viewDirYUp,
     // downTau = 0: no underside darkening on a thin high deck (the D_ambient
     // grid covers layer 1 only, and cirrus undersides are effectively unshaded).
     float cloudSdfM = clamp(nubisSdfKm * 1000.0f, -args.cloudMsSdfDepth * 4.0f, 0.0f);
+    // [nfs2se 0018] as in integrateCloudSample.
+    vec3 sampleSunRadiance = ctx.sunRadiance;
+    if (args.cloudEarthShadow != 0u) {
+      sampleSunRadiance = cloudSunRadianceAtSample(samplePos, ctx, args);
+      if (ctx.sunDirYUp.y <= 0.01f) {
+        dSunProxy = hf * slabThicknessKm * slabDensityScale;
+      }
+    }
     NubisCubedLighting lighting = evalNubisCubedSampleCore(
         samplePos, density, nubisProfile, cloudSdfM, /*downTau=*/0.0f, detailSigned,
-        viewDirYUp, ctx.sunDirYUp, ctx.sunRadiance,
+        viewDirYUp, ctx.sunDirYUp, sampleSunRadiance,
         ctx.skyRadianceWarm, ctx.skyRadianceCool, ctx.skyRadianceZenith,
         args, /*isZUp=*/false, /*dSunOverride=*/dSunProxy);
 

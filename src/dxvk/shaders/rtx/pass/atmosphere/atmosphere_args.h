@@ -662,4 +662,13 @@ struct AtmosphereArgs {
   float horizonTintDirZ;             // cos(azimuth)
   float horizonTintHalfWidthRad;     // azimuth Gaussian width
   float horizonTintHeightRad;        // the glow's exponential fall-off above the line
+
+  // [nfs2se 0018] Clouds in the earth's shadow: one whole vec4 row. When 1,
+  // each cloud sample is lit by the sun as seen from ITS OWN position on the
+  // cloud planet (altitude dip + the planet's curvature toward the sun), so a
+  // sun set for the camera still lights distant / high cloud from below.
+  uint  cloudEarthShadow;
+  float cloudEarthShadowPad0;
+  float cloudEarthShadowPad1;
+  float cloudEarthShadowPad2;
 };
