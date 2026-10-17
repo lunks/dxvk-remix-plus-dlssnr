@@ -173,6 +173,10 @@ namespace dxvk {
     DxvkSubmitStatus          m_presentStatus;
 
     std::vector<Rc<DxvkImageView>> m_imageViews;
+    // [nfs2se 0021] HUD-less frame generation: the presenter's HUD-less twins (empty when off) and the staging copy injectRTX fills
+    std::vector<Rc<DxvkImageView>> m_hudlessViews;
+    Rc<DxvkImage>             m_hudlessStaging;
+    Rc<DxvkImageView>         m_hudlessStagingView;
 
 
     uint64_t                  m_frameId           = D3D9DeviceEx::MaxFrameLatency;

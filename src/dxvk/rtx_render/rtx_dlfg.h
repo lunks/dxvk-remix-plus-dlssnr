@@ -146,9 +146,29 @@ namespace dxvk {
     int getPresentFrameCount() {
       return m_lastPresentFrameCount;
     }
+
+    // [nfs2se 0021] the HUD-less twin of backbuffer `index` (VK_NULL_HANDLE when rtx.dlfg.hudlessComposite was off at creation);
+    // the D3D9 swap chain blits the frame as it was before the UI raster into it, with the same blitter as the backbuffer
+    VkImage getHudlessImage(uint32_t index) const {
+      return index < m_hudlessImages.size() ? m_hudlessImages[index]->handle() : VK_NULL_HANDLE;
+    }
   private:
     DxvkDevice* m_device;
     Rc<DxvkContext> m_ctx;
+
+    // [nfs2se 0021] HUD-less frame generation: DLFG interpolates the HUD-less twins, then a compute pass puts back every pixel the
+    // UI changed (backbuffer != twin) from the rendered frame, so the UI is never warped by the scene's motion vectors
+    std::vector<Rc<DxvkImage>> m_hudlessImages;
+    std::vector<Rc<DxvkImageView>> m_hudlessViews;
+    VkDescriptorSetLayout m_hudSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_hudPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_hudPipeline = VK_NULL_HANDLE;
+    VkDescriptorPool m_hudDescriptorPool = VK_NULL_HANDLE;
+    std::vector<VkDescriptorPool> m_hudRetiredPools;  // sets of a recreated swapchain may still be in flight: freed with the presenter
+    std::vector<VkDescriptorSet> m_hudSets;  // [backbuffer * swapchain image count + swapchain image]
+    void createHudComposite();
+    void destroyHudComposite();
+    void compositeHud(DxvkDLFGCommandList* commandList, uint32_t swapchainIndex, uint32_t backbufferIndex);
 
     // used by HUD to determine FPS, holds the total number of frames queued in the latest present call
     // initialized to 1 since during the first frame this will be queried before DLFG runs, so assume worst-case and let it update later
@@ -300,6 +320,12 @@ namespace dxvk {
                     args.minValue = 1, args.maxValue = 6,
                     args.flags = RtxOptionFlags::UserSetting);
     RTX_OPTION("rtx.dlfg", bool, enablePresentMetering, true, "Use hardware present metering for DLSS 4.0 frame generation instead of CPU pacing.");
+    // [nfs2se 0021]
+    RTX_OPTION("rtx.dlfg", bool, hudlessComposite, false, "Frame generation interpolates the frame as it was before the rasterized UI, and every generated frame gets the UI of the rendered frame composited back on top (no UI smear). Read when the frame generation presenter is created.");
+
+    // [nfs2se 0021] the HUD-less copy of the ray-traced frame, written by injectRTX, read by the D3D9 present blit; CS thread only
+    void setHudlessStaging(const Rc<DxvkImage>& image) { m_hudlessStaging = image; }
+    const Rc<DxvkImage>& getHudlessStaging() const { return m_hudlessStaging; }
 
   private:
     std::unique_ptr<NGXDLFGContext> m_dlfgContext = nullptr;
@@ -314,5 +340,7 @@ namespace dxvk {
 
     // timestamp query pool for the DLFG pacer
     Rc<DxvkDLFGTimestampQueryPool> m_queryPoolDLFG;
+
+    Rc<DxvkImage> m_hudlessStaging;  // [nfs2se 0021]
   };
 } // namespace dxvk

@@ -2,6 +2,8 @@
 #include "rtx_dlfg.h"
 #include "rtx_fork_gpu_timer.h" // [nfs2se 0015]
 
+#include <dxvk_dlfg_hud_composite.h> // [nfs2se 0021]
+
 #include <cstdio>
 
 namespace {
@@ -192,6 +194,8 @@ namespace dxvk {
 
       m_pacerThread.threadHandle.join();
     }
+
+    destroyHudComposite();  // [nfs2se 0021]
   }
 
   vk::PresenterImage DxvkDLFGPresenter::getImage(uint32_t index) const {
@@ -384,6 +388,157 @@ namespace dxvk {
       m_swapchainImageViews[i] = new DxvkImageView(m_device->vkd(), m_swapchainImages[i], viewInfo);
       m_swapchainImageLayouts[i] = VK_IMAGE_LAYOUT_UNDEFINED;
     }
+
+    createHudComposite();  // [nfs2se 0021]
+  }
+
+  // [nfs2se 0021] HUD-less frame generation (rtx.dlfg.hudlessComposite). The twins have the backbuffers' create info, so the D3D9 present
+  // blit treats them exactly alike. The pipeline and layouts live as long as the presenter; a recreate retires the old descriptor pool
+  // (command lists in flight may still use its sets) and the destructor frees all of them.
+  void DxvkDLFGPresenter::createHudComposite() {
+    m_hudlessImages.clear();
+    m_hudlessViews.clear();
+    m_hudSets.clear();
+    if (!DxvkDLFG::hudlessComposite() || m_appRequestedImageCount == 0 || m_info.imageCount == 0) {
+      return;
+    }
+
+    const auto& vkd = m_device->vkd();
+    const VkDevice dev = vkd->device();
+
+    if (m_hudPipeline == VK_NULL_HANDLE) {
+      VkDescriptorSetLayoutBinding bindings[3] = {
+        { 0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
+        { 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
+        { 2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
+      };
+      VkDescriptorSetLayoutCreateInfo setInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+      setInfo.bindingCount = 3;
+      setInfo.pBindings = bindings;
+      VkPushConstantRange push = { VK_SHADER_STAGE_COMPUTE_BIT, 0, 2 * sizeof(uint32_t) };
+      VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+      layoutInfo.setLayoutCount = 1;
+      layoutInfo.pSetLayouts = &m_hudSetLayout;
+      layoutInfo.pushConstantRangeCount = 1;
+      layoutInfo.pPushConstantRanges = &push;
+      VkShaderModuleCreateInfo moduleInfo = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      moduleInfo.codeSize = sizeof(dxvk_dlfg_hud_composite);
+      moduleInfo.pCode = dxvk_dlfg_hud_composite;
+      VkShaderModule module = VK_NULL_HANDLE;
+      if (vkd->vkCreateDescriptorSetLayout(dev, &setInfo, nullptr, &m_hudSetLayout) != VK_SUCCESS
+       || vkd->vkCreatePipelineLayout(dev, &layoutInfo, nullptr, &m_hudPipelineLayout) != VK_SUCCESS
+       || vkd->vkCreateShaderModule(dev, &moduleInfo, nullptr, &module) != VK_SUCCESS) {
+        throw DxvkError("DLFG: HUD-less composite: failed to create its layouts or shader module");
+      }
+      VkComputePipelineCreateInfo pipeInfo = { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+      pipeInfo.stage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_COMPUTE_BIT, module, "main", nullptr };
+      pipeInfo.layout = m_hudPipelineLayout;
+      const VkResult pipeResult = vkd->vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, &pipeInfo, nullptr, &m_hudPipeline);
+      vkd->vkDestroyShaderModule(dev, module, nullptr);
+      if (pipeResult != VK_SUCCESS) {
+        throw DxvkError("DLFG: HUD-less composite: failed to create its compute pipeline");
+      }
+    }
+
+    m_hudlessImages.resize(m_appRequestedImageCount);
+    m_hudlessViews.resize(m_appRequestedImageCount);
+    for (uint32_t i = 0; i < m_appRequestedImageCount; i++) {
+      m_hudlessImages[i] = m_device->createImage(m_backbufferImages[i]->info(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, DxvkMemoryStats::RTXRenderTarget, "DLFG HUD-less backbuffer");
+      m_hudlessViews[i] = m_device->createImageView(m_hudlessImages[i], m_backbufferViews[i]->info());
+    }
+
+    if (m_hudDescriptorPool != VK_NULL_HANDLE) {
+      m_hudRetiredPools.push_back(m_hudDescriptorPool);
+      m_hudDescriptorPool = VK_NULL_HANDLE;
+    }
+    const uint32_t numSets = m_appRequestedImageCount * m_info.imageCount;
+    VkDescriptorPoolSize sizes[2] = {
+      { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 * numSets },
+      { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, numSets },
+    };
+    VkDescriptorPoolCreateInfo poolInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    poolInfo.maxSets = numSets;
+    poolInfo.poolSizeCount = 2;
+    poolInfo.pPoolSizes = sizes;
+    if (vkd->vkCreateDescriptorPool(dev, &poolInfo, nullptr, &m_hudDescriptorPool) != VK_SUCCESS) {
+      throw DxvkError("DLFG: HUD-less composite: failed to create its descriptor pool");
+    }
+    std::vector<VkDescriptorSetLayout> layouts(numSets, m_hudSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    allocInfo.descriptorPool = m_hudDescriptorPool;
+    allocInfo.descriptorSetCount = numSets;
+    allocInfo.pSetLayouts = layouts.data();
+    m_hudSets.resize(numSets);
+    if (vkd->vkAllocateDescriptorSets(dev, &allocInfo, m_hudSets.data()) != VK_SUCCESS) {
+      throw DxvkError("DLFG: HUD-less composite: failed to allocate its descriptor sets");
+    }
+    for (uint32_t b = 0; b < m_appRequestedImageCount; b++) {
+      for (uint32_t s = 0; s < m_info.imageCount; s++) {
+        VkDescriptorImageInfo images[3] = {
+          { VK_NULL_HANDLE, m_backbufferViews[b]->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+          { VK_NULL_HANDLE, m_hudlessViews[b]->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+          { VK_NULL_HANDLE, m_swapchainImageViews[s]->handle(), VK_IMAGE_LAYOUT_GENERAL },
+        };
+        VkWriteDescriptorSet writes[3];
+        for (uint32_t k = 0; k < 3; k++) {
+          writes[k] = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+          writes[k].dstSet = m_hudSets[b * m_info.imageCount + s];
+          writes[k].dstBinding = k;
+          writes[k].descriptorCount = 1;
+          writes[k].descriptorType = k == 2 ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+          writes[k].pImageInfo = &images[k];
+        }
+        vkd->vkUpdateDescriptorSets(dev, 3, writes, 0, nullptr);
+      }
+    }
+    Logger::info(str::format("DLFG: HUD-less composite ready: ", m_appRequestedImageCount, " HUD-less backbuffers, ", m_info.imageCount, " swapchain images"));
+  }
+
+  void DxvkDLFGPresenter::destroyHudComposite() {
+    const auto& vkd = m_device->vkd();
+    const VkDevice dev = vkd->device();
+    m_hudSets.clear();
+    if (m_hudDescriptorPool != VK_NULL_HANDLE) {
+      m_hudRetiredPools.push_back(m_hudDescriptorPool);
+      m_hudDescriptorPool = VK_NULL_HANDLE;
+    }
+    for (VkDescriptorPool pool : m_hudRetiredPools) {
+      vkd->vkDestroyDescriptorPool(dev, pool, nullptr);
+    }
+    m_hudRetiredPools.clear();
+    if (m_hudPipeline != VK_NULL_HANDLE) {
+      vkd->vkDestroyPipeline(dev, m_hudPipeline, nullptr);
+      vkd->vkDestroyPipelineLayout(dev, m_hudPipelineLayout, nullptr);
+      vkd->vkDestroyDescriptorSetLayout(dev, m_hudSetLayout, nullptr);
+      m_hudPipeline = VK_NULL_HANDLE;
+      m_hudPipelineLayout = VK_NULL_HANDLE;
+      m_hudSetLayout = VK_NULL_HANDLE;
+    }
+  }
+
+  // records the composite into a generated swapchain image (GENERAL, written by the DLFG evaluate); the rendered backbuffer and its
+  // twin are in SHADER_READ_ONLY_OPTIMAL (the pre-eval barriers)
+  void DxvkDLFGPresenter::compositeHud(DxvkDLFGCommandList* commandList, uint32_t swapchainIndex, uint32_t backbufferIndex) {
+    ScopedGpuProfileZone_Present(m_device, commandList->getCmdBuffer(), "DLFG HUD-less composite");
+    const auto& vkd = m_device->vkd();
+    const VkCommandBuffer cmd = commandList->getCmdBuffer();
+
+    DxvkDLFGImageBarrierSet<1> barriers;
+    barriers.addBarrier(m_swapchainImages[swapchainIndex]->handle(), VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+    barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+    const uint32_t extent[2] = { m_info.imageExtent.width, m_info.imageExtent.height };
+    const VkDescriptorSet set = m_hudSets[backbufferIndex * m_info.imageCount + swapchainIndex];
+    vkd->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hudPipeline);
+    vkd->vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hudPipelineLayout, 0, 1, &set, 0, nullptr);
+    vkd->vkCmdPushConstants(cmd, m_hudPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(extent), extent);
+    vkd->vkCmdDispatch(cmd, (extent[0] + 7) / 8, (extent[1] + 7) / 8, 1);
+
+    commandList->trackResource<DxvkAccess::Read>(m_backbufferViews[backbufferIndex]);
+    commandList->trackResource<DxvkAccess::Read>(m_hudlessViews[backbufferIndex]);
+    commandList->trackResource<DxvkAccess::Write>(m_swapchainImageViews[swapchainIndex]);
   }
 
   void DxvkDLFGPresenter::synchronize() {
@@ -424,6 +579,7 @@ namespace dxvk {
                                            uint32_t interpolatedFrameIndex) {
     DxvkDLFG& dlfg = m_device->getCommon()->metaDLFG();
     DxvkDLFGImageBarrierSet<4> barriers;
+    const bool hudless = present.frameInterpolation.hudless && present.acquiredImageIndex < m_hudlessViews.size() && !m_hudSets.empty();  // [nfs2se 0021]
 
     {
       ScopedGpuProfileZone_Present(m_device, commandList->getCmdBuffer(), "DLFG pre-eval barriers");
@@ -445,12 +601,16 @@ namespace dxvk {
                   commandList,
                   present.frameInterpolation.camera,
                   m_swapchainImageViews[swapchainImage.index],
-                  m_backbufferViews[present.acquiredImageIndex],
+                  hudless ? m_hudlessViews[present.acquiredImageIndex] : m_backbufferViews[present.acquiredImageIndex],  // [nfs2se 0021]
                   present.frameInterpolation.motionVectors,
                   present.frameInterpolation.depth,
                   interpolatedFrameIndex,
                   present.frameInterpolation.interpolatedFrameCount,
                   false);
+
+    if (hudless) {
+      compositeHud(commandList, swapchainImage.index, present.acquiredImageIndex);  // [nfs2se 0021]
+    }
 
     {
       ScopedGpuProfileZone_Present(m_device, commandList->getCmdBuffer(), "DLFG post-eval barriers");
@@ -626,6 +786,9 @@ namespace dxvk {
         PacerJob pacer;
 
         SwapchainImage interpolatedSwapchainImages[kDLFGMaxInterpolatedFrames];
+
+        // [nfs2se 0021] the same test interpolateFrame makes
+        const bool presentHudless = present.frameInterpolation.hudless && present.acquiredImageIndex < m_hudlessViews.size() && !m_hudSets.empty();
         
         const auto& reflex = m_ctx->getCommonObjects()->metaReflex();
 
@@ -673,6 +836,15 @@ namespace dxvk {
                               present.frameInterpolation.depthLayout,
                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+          if (presentHudless) {  // [nfs2se 0021]
+            barriers.addBarrier(m_hudlessImages[present.acquiredImageIndex]->handle(),
+                                VK_IMAGE_ASPECT_COLOR_BIT,
+                                VK_ACCESS_NONE,
+                                VK_ACCESS_SHADER_READ_BIT,
+                                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+          }
+
           barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         }
 
@@ -716,6 +888,15 @@ namespace dxvk {
                                 VK_ACCESS_SHADER_WRITE_BIT,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                 present.frameInterpolation.depthLayout);
+
+            if (presentHudless) {  // [nfs2se 0021]
+              barriers.addBarrier(m_hudlessImages[present.acquiredImageIndex]->handle(),
+                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                  VK_ACCESS_SHADER_READ_BIT,
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            }
 
             barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
           }
