@@ -176,7 +176,7 @@ namespace dxvk {
     uint32_t m_dumpSeq = 0;
     std::vector<Rc<DxvkBuffer>> m_dumpBuffers;
     void nfs2seDumpRecord(DxvkDLFGCommandList* commandList, VkImage image, VkImageLayout layout, uint32_t slot, bool afterShaderWrite);
-    void nfs2seDumpWrite(const PresentJob& present, bool hudless);
+    void nfs2seDumpWrite(uint32_t interpolatedFrameCount, bool hudless);
 
     // used by HUD to determine FPS, holds the total number of frames queued in the latest present call
     // initialized to 1 since during the first frame this will be queried before DLFG runs, so assume worst-case and let it update later

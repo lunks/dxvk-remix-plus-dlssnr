@@ -522,7 +522,7 @@ namespace dxvk {
   }
 
   // [nfs2se 0022] DIAGNOSTIC: waits for the DLFG queue (this batch only), then writes the generated images and the rendered one in present order
-  void DxvkDLFGPresenter::nfs2seDumpWrite(const PresentJob& present, bool hudless) {
+  void DxvkDLFGPresenter::nfs2seDumpWrite(uint32_t interpolatedFrameCount, bool hudless) {
     m_device->vkd()->vkQueueWaitIdle(m_device->queues().__DLFG_QUEUE.queueHandle);
     char exe[MAX_PATH] = {};
     const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
@@ -531,7 +531,7 @@ namespace dxvk {
     dir = (slash == std::string::npos ? std::string(".") : dir.substr(0, slash)) + "\\fgdump";
     CreateDirectoryA(dir.c_str(), nullptr);
     const uint32_t w = m_info.imageExtent.width, h = m_info.imageExtent.height;
-    const uint32_t count = present.frameInterpolation.interpolatedFrameCount + 1;
+    const uint32_t count = interpolatedFrameCount + 1;
     for (uint32_t k = 0; k < count && k < m_dumpBuffers.size() && m_dumpSeq < DxvkDLFG::nfs2seDumpCount(); k++) {
       const bool rendered = k + 1 == count;
       char name[64];
@@ -1055,7 +1055,7 @@ namespace dxvk {
         commandList = nullptr;
 
         if (m_dumpJob) {  // [nfs2se 0022]
-          nfs2seDumpWrite(present, presentHudless);
+          nfs2seDumpWrite(present.frameInterpolation.interpolatedFrameCount, presentHudless);
           m_dumpJob = false;
         }
 
