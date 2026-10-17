@@ -642,4 +642,24 @@ struct AtmosphereArgs {
                                 // any further growth needs a new full
                                 // 16-byte row (see the CB-alignment
                                 // discipline note at the top).
+
+  // [nfs2se 0017] Horizon shaping: a ground below a horizon line, a narrow band
+  // above it and an azimuth sector of warm glow, applied per ray in
+  // evalSkyRadiance (every sky miss: primary, PSR, indirect). Five whole vec4
+  // rows. Composite-only: zeroed in normalizeForSkyLutCache. Inert at the
+  // defaults (opacity / intensity / strength 0).
+  vec3  horizonGroundColor;          // radiance of the ground
+  float horizonGroundOpacity;        // 0 = off, 1 = opaque ground below the line
+  vec3  horizonBandColor;
+  float horizonBandIntensity;        // 0 = off
+  vec3  horizonTintColor;
+  float horizonTintStrength;         // 0 = off (also gates the band's recolouring)
+  float horizonGroundElevationRad;   // the horizon line (the ground's top edge)
+  float horizonGroundFadeWidthRad;   // sky -> ground over this angle below the line
+  float horizonBandElevationRad;     // band centre
+  float horizonBandHalfWidthRad;     // band Gaussian width: exp(-(d/w)^2)
+  float horizonTintDirX;             // tint sector centre, sin(azimuth) (sunRotation convention)
+  float horizonTintDirZ;             // cos(azimuth)
+  float horizonTintHalfWidthRad;     // azimuth Gaussian width
+  float horizonTintHeightRad;        // the glow's exponential fall-off above the line
 };

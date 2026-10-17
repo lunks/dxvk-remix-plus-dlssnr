@@ -1372,6 +1372,22 @@ namespace dxvk {
                "the visible sky.",
       args.minValue = 0.0f);
 
+    // [nfs2se 0017] Horizon shaping for Numos (painted-sky looks: a dark ground strip under a narrow bright band).
+    // Applied per sky-miss ray after the LUT sample (primary, PSR, indirect), never baked; inert at the defaults.
+    RTX_OPTION("rtx.atmosphere", float, horizonGroundOpacity, 0.0f, "[nfs2se 0017] Opacity of a flat ground colour below the horizon line (rtx.atmosphere.horizonGroundElevation). 0 = off (Numos unchanged), 1 = the sky below the line is replaced by horizonGroundColor, also for indirect and reflected misses.");
+    RTX_OPTION("rtx.atmosphere", Vector3, horizonGroundColor, Vector3(0.0f, 0.0f, 0.0f), "[nfs2se 0017] Linear radiance of the ground below the horizon line.");
+    RTX_OPTION("rtx.atmosphere", float, horizonGroundElevation, 0.0f, "[nfs2se 0017] Elevation in degrees of the horizon line (the ground's top edge); may be raised above the geometric horizon.");
+    RTX_OPTION("rtx.atmosphere", float, horizonGroundFadeWidth, 1.0f, "[nfs2se 0017] Angle in degrees below the horizon line over which the sky fades into the ground (smoothstep). 0 = a hard edge.");
+    RTX_OPTION("rtx.atmosphere", float, horizonBandIntensity, 0.0f, "[nfs2se 0017] Intensity of an additive horizon band (horizonBandColor x intensity at its centre). 0 = off.");
+    RTX_OPTION("rtx.atmosphere", Vector3, horizonBandColor, Vector3(1.0f, 1.0f, 1.0f), "[nfs2se 0017] Colour of the horizon band.");
+    RTX_OPTION("rtx.atmosphere", float, horizonBandElevation, 2.0f, "[nfs2se 0017] Elevation in degrees of the horizon band's centre.");
+    RTX_OPTION("rtx.atmosphere", float, horizonBandHalfWidth, 2.0f, "[nfs2se 0017] Angular half-width in degrees of the band: its profile is exp(-(d / halfWidth)^2), d the angle from the centre.");
+    RTX_OPTION("rtx.atmosphere", float, horizonTintStrength, 0.0f, "[nfs2se 0017] Strength of an additive warm glow in an azimuth sector (horizonTintColor x strength at the line, fading upward over horizonTintHeight); inside the sector the band also takes horizonTintColor. 0 = off.");
+    RTX_OPTION("rtx.atmosphere", Vector3, horizonTintColor, Vector3(1.0f, 0.45f, 0.15f), "[nfs2se 0017] Colour of the sector glow and of the band inside the sector.");
+    RTX_OPTION("rtx.atmosphere", float, horizonTintAzimuth, 180.0f, "[nfs2se 0017] Azimuth in degrees of the sector's centre (the convention of sunRotation).");
+    RTX_OPTION("rtx.atmosphere", float, horizonTintHalfWidth, 45.0f, "[nfs2se 0017] Azimuth half-width in degrees of the sector: exp(-(d / halfWidth)^2).");
+    RTX_OPTION("rtx.atmosphere", float, horizonTintHeight, 10.0f, "[nfs2se 0017] Angle in degrees over which the sector glow falls to 1/e above the horizon line.");
+
     // ----- Night-sky shading (fork) -----
     // Stars, Milky Way, shooting stars, airglow. Active when skyMode == Numos.
     RTX_OPTION("rtx.atmosphere", float, starBrightness, 0.5f,

@@ -426,6 +426,21 @@ namespace {
     // Temporal-smoother weight (fork — crispness pass): composite-only, so a
     // slider drag must not invalidate the sky-LUT cache key.
     args.cloudHistoryWeight          = 0.0f;
+    // [nfs2se 0017] horizon shaping: composite-only (evalSkyRadiance), never a bake.
+    args.horizonGroundColor          = vec3(0.0f, 0.0f, 0.0f);
+    args.horizonGroundOpacity        = 0.0f;
+    args.horizonBandColor            = vec3(0.0f, 0.0f, 0.0f);
+    args.horizonBandIntensity        = 0.0f;
+    args.horizonTintColor            = vec3(0.0f, 0.0f, 0.0f);
+    args.horizonTintStrength         = 0.0f;
+    args.horizonGroundElevationRad   = 0.0f;
+    args.horizonGroundFadeWidthRad   = 0.0f;
+    args.horizonBandElevationRad     = 0.0f;
+    args.horizonBandHalfWidthRad     = 0.0f;
+    args.horizonTintDirX             = 0.0f;
+    args.horizonTintDirZ             = 0.0f;
+    args.horizonTintHalfWidthRad     = 0.0f;
+    args.horizonTintHeightRad        = 0.0f;
     // Star / Milky Way fields feed ONLY runtime miss shading (evalNightSky /
     // evalStarField) — never any LUT bake. BUG FIX (fork — 2026-07-16, GT7
     // cross-audit): normalizeForSkyViewLutKey's comment always claimed these
@@ -633,6 +648,22 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   // (post-LUT-sample), so it never feeds any LUT bake — see normalizeForSkyLutCache,
   // which zeroes it in the cache key so dragging the slider doesn't trigger a rebake.
   args.skyIndirectRadianceScale = std::max(RtxOptions::skyIndirectRadianceScale(), 0.0f);
+
+  // [nfs2se 0017] Horizon shaping (per ray in evalSkyRadiance; zeroed in normalizeForSkyLutCache).
+  args.horizonGroundColor        = RtxOptions::horizonGroundColor();
+  args.horizonGroundOpacity      = std::min(std::max(RtxOptions::horizonGroundOpacity(), 0.0f), 1.0f);
+  args.horizonBandColor          = RtxOptions::horizonBandColor();
+  args.horizonBandIntensity      = std::max(RtxOptions::horizonBandIntensity(), 0.0f);
+  args.horizonTintColor          = RtxOptions::horizonTintColor();
+  args.horizonTintStrength       = std::max(RtxOptions::horizonTintStrength(), 0.0f);
+  args.horizonGroundElevationRad = RtxOptions::horizonGroundElevation() * kDegToRad;
+  args.horizonGroundFadeWidthRad = std::max(RtxOptions::horizonGroundFadeWidth(), 0.0f) * kDegToRad;
+  args.horizonBandElevationRad   = RtxOptions::horizonBandElevation() * kDegToRad;
+  args.horizonBandHalfWidthRad   = std::max(RtxOptions::horizonBandHalfWidth(), 0.0f) * kDegToRad;
+  args.horizonTintDirX           = std::sin(RtxOptions::horizonTintAzimuth() * kDegToRad);
+  args.horizonTintDirZ           = std::cos(RtxOptions::horizonTintAzimuth() * kDegToRad);
+  args.horizonTintHalfWidthRad   = std::max(RtxOptions::horizonTintHalfWidth(), 0.0f) * kDegToRad;
+  args.horizonTintHeightRad      = std::max(RtxOptions::horizonTintHeight(), 0.0f) * kDegToRad;
 
   // LUT dimensions
   args.transmittanceLutWidth = kTransmittanceLutWidth;
