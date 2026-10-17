@@ -1388,6 +1388,8 @@ namespace dxvk {
     RTX_OPTION("rtx.atmosphere", float, horizonTintHalfWidth, 45.0f, "[nfs2se 0017] Azimuth half-width in degrees of the sector: exp(-(d / halfWidth)^2).");
     RTX_OPTION("rtx.atmosphere", float, horizonTintHeight, 10.0f, "[nfs2se 0017] Angle in degrees over which the sector glow falls to 1/e above the horizon line.");
 
+    // [nfs2se 0019]
+    RTX_OPTION("rtx.atmosphere", float, horizonSectorShift, 0.0f, "[nfs2se 0019] Degrees added to the horizon line (horizonGroundElevation) and the band centre (horizonBandElevation) inside the tint sector (horizonTintAzimuth / horizonTintHalfWidth, weight exp(-(d/w)^2)), so a painted horizon can sit lower or higher at one heading. 0 = off (the same elevation all round). Independent of horizonTintStrength.");
     // [nfs2se 0018]
     RTX_OPTION("rtx.atmosphere", bool, cloudEarthShadow, false, "[nfs2se 0018] Light each cloud sample with the sun as seen from that sample (its altitude's horizon dip and the cloud planet's curvature toward the sun) instead of from the camera; with the sun just below the camera's horizon, distant and high clouds toward it stay lit from below, reddened by the long air path. False (default) = the per-ray day gate.");
 

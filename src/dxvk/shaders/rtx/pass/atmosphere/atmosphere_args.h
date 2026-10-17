@@ -668,7 +668,10 @@ struct AtmosphereArgs {
   // cloud planet (altitude dip + the planet's curvature toward the sun), so a
   // sun set for the camera still lights distant / high cloud from below.
   uint  cloudEarthShadow;
-  float cloudEarthShadowPad0;
+  // [nfs2se 0019] Heading-dependent horizon: added to the ground line and the
+  // band centre inside the tint sector (weight exp(-(dAz / horizonTintHalfWidth)^2)
+  // around horizonTintAzimuth). 0 = off. Rides the former 0018 pad.
+  float horizonSectorShiftRad;
   float cloudEarthShadowPad1;
   float cloudEarthShadowPad2;
 };

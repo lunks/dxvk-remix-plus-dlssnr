@@ -713,6 +713,18 @@ vec3 evalMoonDisk(vec3 viewDir, uint moonIdx, AtmosphereArgs args, out float dis
 // temporal-smoothing path applies on top of either source uniformly because
 // both produce the same (rgb-pre-step, opacity) shape; see the
 // alpha-convention note at the branch.
+// [nfs2se 0019] rtx.atmosphere.horizonSectorShift: the angle added to the horizon
+// line and the band centre at this view's heading (the tint sector's Gaussian in
+// azimuth). Exactly 0 when the option is 0.
+float horizonSectorShiftAt(vec3 viewDirYUp, AtmosphereArgs args) {
+  if (args.horizonSectorShiftRad == 0.0f) return 0.0f;
+  const float horizLen = length(viewDirYUp.xz);
+  if (horizLen <= 1e-5f) return 0.0f;
+  const float cosAz = dot(viewDirYUp.xz / horizLen, vec2(args.horizonTintDirX, args.horizonTintDirZ));
+  const float az = acos(clamp(cosAz, -1.0f, 1.0f)) / max(args.horizonTintHalfWidthRad, 1e-4f);
+  return args.horizonSectorShiftRad * exp(-az * az);
+}
+
 vec3 evalSkyRadiance(
   vec3 viewDir,
   AtmosphereArgs args,
@@ -779,6 +791,7 @@ vec3 evalSkyRadiance(
   // added before the cloud composite. Skipped entirely at the defaults (0).
   if (args.horizonBandIntensity > 0.0f || args.horizonTintStrength > 0.0f) {
     const float elev = asin(clamp(viewDirYUp.y, -1.0f, 1.0f));
+    const float sectorShift = horizonSectorShiftAt(viewDirYUp, args);  // [nfs2se 0019]
     float tintLobe = 0.0f;
     if (args.horizonTintStrength > 0.0f) {
       const float horizLen = length(viewDirYUp.xz);
@@ -787,12 +800,12 @@ vec3 evalSkyRadiance(
         : -1.0f;
       const float az = acos(clamp(cosAz, -1.0f, 1.0f)) / max(args.horizonTintHalfWidthRad, 1e-4f);
       tintLobe = exp(-az * az);
-      const float above = max(elev - args.horizonGroundElevationRad, 0.0f);
+      const float above = max(elev - (args.horizonGroundElevationRad + sectorShift), 0.0f);
       radiance += args.horizonTintColor
                 * (args.horizonTintStrength * tintLobe * exp(-above / max(args.horizonTintHeightRad, 1e-4f)));
     }
     if (args.horizonBandIntensity > 0.0f) {
-      const float d = (elev - args.horizonBandElevationRad) / max(args.horizonBandHalfWidthRad, 1e-4f);
+      const float d = (elev - (args.horizonBandElevationRad + sectorShift)) / max(args.horizonBandHalfWidthRad, 1e-4f);
       radiance += mix(args.horizonBandColor, args.horizonTintColor, tintLobe)
                 * (args.horizonBandIntensity * exp(-d * d));
     }
@@ -1122,7 +1135,8 @@ vec3 evalSkyRadiance(
   // [nfs2se 0017] Ground below the horizon line: opaque over everything above
   // (atmosphere, band, moons, clouds, stars), for every ray that misses.
   if (args.horizonGroundOpacity > 0.0f) {
-    const float below = args.horizonGroundElevationRad - asin(clamp(viewDirYUp.y, -1.0f, 1.0f));
+    const float below = (args.horizonGroundElevationRad + horizonSectorShiftAt(viewDirYUp, args))  // [nfs2se 0019]
+                      - asin(clamp(viewDirYUp.y, -1.0f, 1.0f));
     const float g = args.horizonGroundOpacity
                   * smoothstep(0.0f, max(args.horizonGroundFadeWidthRad, 1e-4f), below);
     radiance = mix(radiance, max(args.horizonGroundColor, vec3(0.0f)), g);
