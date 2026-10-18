@@ -795,11 +795,11 @@ vec3 evalSkyRadiance(
 
   // [nfs2se 0017] Horizon band and warm sector glow: sky light behind the clouds, so
   // added before the cloud composite. Skipped entirely at the defaults (0).
-  if (args.horizonBandIntensity > 0.0f || args.horizonTintStrength > 0.0f) {
+  if (args.horizonBandIntensity > 0.0f || args.horizonTintStrength > 0.0f || args.horizonTintRecolor > 0.0f) {  // [nfs2se 0023] recolour
     const float elev = asin(clamp(viewDirYUp.y, -1.0f, 1.0f));
     const float sectorShift = horizonSectorShiftAt(viewDirYUp, args);  // [nfs2se 0019]
     float tintLobe = 0.0f;
-    if (args.horizonTintStrength > 0.0f) {
+    if (args.horizonTintStrength > 0.0f || args.horizonTintRecolor > 0.0f) {  // [nfs2se 0023]
       const float horizLen = length(viewDirYUp.xz);
       const float cosAz = horizLen > 1e-5f
         ? dot(viewDirYUp.xz / horizLen, vec2(args.horizonTintDirX, args.horizonTintDirZ))
@@ -807,6 +807,13 @@ vec3 evalSkyRadiance(
       const float az = acos(clamp(cosAz, -1.0f, 1.0f)) / max(args.horizonTintHalfWidthRad, 1e-4f);
       tintLobe = exp(-az * az);
       const float above = max(elev - (args.horizonGroundElevationRad + sectorShift), 0.0f);
+      // [nfs2se 0023] rtx.atmosphere.horizonTintRecolor: the sky in the sector takes the tint's hue at its own luminance.
+      if (args.horizonTintRecolor > 0.0f) {
+        const vec3 lumW = vec3(0.2126f, 0.7152f, 0.0722f);
+        const vec3 hue = max(args.horizonTintColor, vec3(0.0f)) / max(dot(max(args.horizonTintColor, vec3(0.0f)), lumW), 1e-4f);
+        const float w = args.horizonTintRecolor * tintLobe * exp(-above / max(args.horizonTintHeightRad, 1e-4f));
+        radiance = mix(radiance, hue * dot(radiance, lumW), w);
+      }
       radiance += args.horizonTintColor
                 * (args.horizonTintStrength * tintLobe * exp(-above / max(args.horizonTintHeightRad, 1e-4f)));
     }

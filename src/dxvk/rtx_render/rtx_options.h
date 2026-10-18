@@ -1388,6 +1388,8 @@ namespace dxvk {
     RTX_OPTION("rtx.atmosphere", float, horizonTintHalfWidth, 45.0f, "[nfs2se 0017] Azimuth half-width in degrees of the sector: exp(-(d / halfWidth)^2).");
     RTX_OPTION("rtx.atmosphere", float, horizonTintHeight, 10.0f, "[nfs2se 0017] Angle in degrees over which the sector glow falls to 1/e above the horizon line.");
 
+    // [nfs2se 0023]
+    RTX_OPTION("rtx.atmosphere", float, horizonTintRecolor, 0.0f, "[nfs2se 0023] Recolour of the sky inside the tint sector (horizonTintAzimuth / horizonTintHalfWidth, falling off over horizonTintHeight above the horizon line): the atmosphere's radiance there is moved toward its own luminance in horizonTintColor's hue, by this fraction at the sector's centre on the line. Turns a magenta twilight glow gold without adding light or touching the rest of the dome. Applied before the additive sector glow (horizonTintStrength), behind the clouds. 0 = off (Numos unchanged); 0..1.");
     // [nfs2se 0020]
     RTX_OPTION("rtx.atmosphere", float, skyZenithFalloff, 0.0f, "[nfs2se 0020] Exponent k of a falloff of the atmosphere's own radiance (the sky body, not clouds, stars or moons) with view elevation: x cos(elevation)^k above the horizon, the same factor in the sky ambient the clouds and sky-lit particles sample. Concentrates a dusk sky's light at the horizon and darkens the zenith. 0 = off (Numos unchanged).");
     // [nfs2se 0019]

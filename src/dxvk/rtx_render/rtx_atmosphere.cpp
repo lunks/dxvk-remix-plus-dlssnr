@@ -445,6 +445,7 @@ namespace {
     args.cloudEarthShadow            = 0u;
     args.horizonSectorShiftRad       = 0.0f;   // [nfs2se 0019] composite-only
     args.skyZenithFalloff            = 0.0f;   // [nfs2se 0020] composite / cloud-ambient only, never a LUT bake
+    args.horizonTintRecolor          = 0.0f;   // [nfs2se 0023] composite-only
     // Star / Milky Way fields feed ONLY runtime miss shading (evalNightSky /
     // evalStarField) — never any LUT bake. BUG FIX (fork — 2026-07-16, GT7
     // cross-audit): normalizeForSkyViewLutKey's comment always claimed these
@@ -674,6 +675,8 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   args.horizonSectorShiftRad     = RtxOptions::horizonSectorShift() * kDegToRad;
   // [nfs2se 0020]
   args.skyZenithFalloff          = std::max(RtxOptions::skyZenithFalloff(), 0.0f);
+  // [nfs2se 0023]
+  args.horizonTintRecolor        = std::min(std::max(RtxOptions::horizonTintRecolor(), 0.0f), 1.0f);
 
   // LUT dimensions
   args.transmittanceLutWidth = kTransmittanceLutWidth;

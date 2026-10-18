@@ -675,5 +675,7 @@ struct AtmosphereArgs {
   // [nfs2se 0020] Sky-body zenith falloff exponent (0 = off): the atmosphere's
   // own radiance is scaled by cos(view elevation)^k above the horizon. Rides 0018's pad.
   float skyZenithFalloff;
-  float cloudEarthShadowPad2;
+  // [nfs2se 0023] Recolour fraction of the sky inside the tint sector (0 = off):
+  // its radiance moves toward its own luminance in horizonTintColor's hue. Rides 0018's last pad.
+  float horizonTintRecolor;
 };
