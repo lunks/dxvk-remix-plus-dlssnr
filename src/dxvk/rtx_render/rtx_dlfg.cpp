@@ -494,6 +494,64 @@ namespace dxvk {
     Logger::info(str::format("DLFG: HUD-less composite ready: ", m_appRequestedImageCount, " HUD-less backbuffers, ", m_info.imageCount, " swapchain images"));
   }
 
+  // [nfs2se 0022] DIAGNOSTIC: copy a presented image into dump buffer `slot` (host visible); the files are written after the batch
+  void DxvkDLFGPresenter::nfs2seDumpRecord(DxvkDLFGCommandList* commandList, VkImage image, VkImageLayout layout, uint32_t slot, bool afterShaderWrite) {
+    const VkDeviceSize size = VkDeviceSize(m_info.imageExtent.width) * m_info.imageExtent.height * 4;
+    if (m_dumpBuffers.size() <= slot) {
+      m_dumpBuffers.resize(slot + 1);
+    }
+    if (m_dumpBuffers[slot] == nullptr || m_dumpBuffers[slot]->info().size != size) {
+      DxvkBufferCreateInfo info;
+      info.size = size;
+      info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+      info.stages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      info.access = VK_ACCESS_TRANSFER_WRITE_BIT;
+      m_dumpBuffers[slot] = m_device->createBuffer(info, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                   DxvkMemoryStats::AppBuffer, "nfs2se fgdump");
+    }
+    if (afterShaderWrite) {
+      DxvkDLFGImageBarrierSet<1> barriers;
+      barriers.addBarrier(image, VK_IMAGE_ASPECT_COLOR_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, layout, layout);
+      barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    }
+    VkBufferImageCopy region = {};
+    region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    region.imageExtent = { m_info.imageExtent.width, m_info.imageExtent.height, 1 };
+    m_device->vkd()->vkCmdCopyImageToBuffer(commandList->getCmdBuffer(), image, layout, m_dumpBuffers[slot]->getSliceHandle().handle, 1, &region);
+    commandList->trackResource<DxvkAccess::Write>(m_dumpBuffers[slot]);
+  }
+
+  // [nfs2se 0022] DIAGNOSTIC: waits for the DLFG queue (this batch only), then writes the generated images and the rendered one in present order
+  void DxvkDLFGPresenter::nfs2seDumpWrite(uint32_t interpolatedFrameCount, bool hudless) {
+    m_device->vkd()->vkQueueWaitIdle(m_device->queues().__DLFG_QUEUE.queueHandle);
+    char exe[MAX_PATH] = {};
+    const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
+    std::string dir = (n > 0 && n < MAX_PATH) ? std::string(exe, n) : std::string();
+    const size_t slash = dir.find_last_of("\\/");
+    dir = (slash == std::string::npos ? std::string(".") : dir.substr(0, slash)) + "\\fgdump";
+    CreateDirectoryA(dir.c_str(), nullptr);
+    const uint32_t w = m_info.imageExtent.width, h = m_info.imageExtent.height;
+    const uint32_t count = interpolatedFrameCount + 1;
+    for (uint32_t k = 0; k < count && k < m_dumpBuffers.size() && m_dumpSeq < DxvkDLFG::nfs2seDumpCount(); k++) {
+      const bool rendered = k + 1 == count;
+      char name[64];
+      snprintf(name, sizeof(name), "\\f%04u-b%05u-%c%u.bmp", m_dumpSeq, m_dumpBatch, rendered ? 'r' : 'g', k);
+      const std::string path = dir + name;
+      if (FILE* f = std::fopen(path.c_str(), "wb")) {
+        uint8_t hdr[54] = { 'B', 'M' };
+        auto put32 = [&hdr](uint32_t at, uint32_t v) { for (uint32_t i = 0; i < 4; i++) { hdr[at + i] = uint8_t(v >> (8 * i)); } };
+        put32(2, 54 + w * h * 4); put32(10, 54); put32(14, 40); put32(18, w); put32(22, uint32_t(-int32_t(h)));
+        hdr[26] = 1; hdr[28] = 32; put32(34, w * h * 4);
+        std::fwrite(hdr, 1, sizeof(hdr), f);
+        std::fwrite(m_dumpBuffers[k]->mapPtr(0), 1, size_t(w) * h * 4, f);
+        std::fclose(f);
+      }
+      Logger::info(str::format("[nfs2se-fgdump] seq=", m_dumpSeq, " batch=", m_dumpBatch, " kind=", rendered ? "rendered" : "generated", " index=", k,
+                               " hudless=", hudless ? 1 : 0, " format=", uint32_t(m_info.format.format), " ", w, "x", h, " file=", path));
+      m_dumpSeq++;
+    }
+  }
+
   void DxvkDLFGPresenter::destroyHudComposite() {
     const auto& vkd = m_device->vkd();
     const VkDevice dev = vkd->device();
@@ -611,6 +669,9 @@ namespace dxvk {
     if (hudless) {
       compositeHud(commandList, swapchainImage.index, present.acquiredImageIndex);  // [nfs2se 0021]
     }
+    if (m_dumpJob) {  // [nfs2se 0022]
+      nfs2seDumpRecord(commandList, m_swapchainImages[swapchainImage.index]->handle(), VK_IMAGE_LAYOUT_GENERAL, interpolatedFrameIndex, true);
+    }
 
     {
       ScopedGpuProfileZone_Present(m_device, commandList->getCmdBuffer(), "DLFG post-eval barriers");
@@ -669,6 +730,10 @@ namespace dxvk {
                                     renderedSwapchainImage.image.image,
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                     1, &copy);
+    if (m_dumpJob && frameInterpolated) {  // [nfs2se 0022] the rendered frame = the backbuffer, in TRANSFER_SRC_OPTIMAL here
+      nfs2seDumpRecord(commandList, m_backbufferImages[present.acquiredImageIndex]->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       present.frameInterpolation.interpolatedFrameCount, false);
+    }
 
     barriers.addBarrier(m_backbufferImages[present.acquiredImageIndex]->handle(),
                         VK_IMAGE_ASPECT_COLOR_BIT,
@@ -789,6 +854,10 @@ namespace dxvk {
 
         // [nfs2se 0021] the same test interpolateFrame makes
         const bool presentHudless = present.frameInterpolation.hudless && present.acquiredImageIndex < m_hudlessViews.size() && !m_hudSets.empty();
+
+        // [nfs2se 0022] DIAGNOSTIC
+        m_dumpBatch++;
+        m_dumpJob = DxvkDLFG::nfs2seDumpAfter() > 0 && m_dumpBatch > DxvkDLFG::nfs2seDumpAfter() && m_dumpSeq < DxvkDLFG::nfs2seDumpCount();
         
         const auto& reflex = m_ctx->getCommonObjects()->metaReflex();
 
@@ -984,6 +1053,11 @@ namespace dxvk {
         commandList->endRecording();
         commandList->submit();
         commandList = nullptr;
+
+        if (m_dumpJob) {  // [nfs2se 0022]
+          nfs2seDumpWrite(present.frameInterpolation.interpolatedFrameCount, presentHudless);
+          m_dumpJob = false;
+        }
 
         // rendered frame present
         if (!submitPresent(renderedSwapchainImage, present, pacerSemaphoreValue, nullptr)) {

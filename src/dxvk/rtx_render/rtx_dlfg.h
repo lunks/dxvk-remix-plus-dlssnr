@@ -170,6 +170,14 @@ namespace dxvk {
     void destroyHudComposite();
     void compositeHud(DxvkDLFGCommandList* commandList, uint32_t swapchainIndex, uint32_t backbufferIndex);
 
+    // [nfs2se 0022] DIAGNOSTIC: every presented image (generated and rendered) of a few frame-generation batches, written as BMP files
+    bool m_dumpJob = false;
+    uint32_t m_dumpBatch = 0;
+    uint32_t m_dumpSeq = 0;
+    std::vector<Rc<DxvkBuffer>> m_dumpBuffers;
+    void nfs2seDumpRecord(DxvkDLFGCommandList* commandList, VkImage image, VkImageLayout layout, uint32_t slot, bool afterShaderWrite);
+    void nfs2seDumpWrite(uint32_t interpolatedFrameCount, bool hudless);
+
     // used by HUD to determine FPS, holds the total number of frames queued in the latest present call
     // initialized to 1 since during the first frame this will be queried before DLFG runs, so assume worst-case and let it update later
     int m_lastPresentFrameCount = 1;
@@ -325,6 +333,10 @@ namespace dxvk {
 
     // [nfs2se 0021] the HUD-less copy of the ray-traced frame, written by injectRTX, read by the D3D9 present blit; CS thread only
     void setHudlessStaging(const Rc<DxvkImage>& image) { m_hudlessStaging = image; }
+
+    // [nfs2se 0022] DIAGNOSTIC (bench only)
+    RTX_OPTION("rtx.dlfg", uint32_t, nfs2seDumpAfter, 0, "Diagnostic: after this many frame-generation batches, write every presented image (generated and rendered) of the next batches to fgdump/ next to the exe as BMP. 0 = off.");
+    RTX_OPTION("rtx.dlfg", uint32_t, nfs2seDumpCount, 24, "Diagnostic: how many presented images rtx.dlfg.nfs2seDumpAfter writes.");
     const Rc<DxvkImage>& getHudlessStaging() const { return m_hudlessStaging; }
 
   private:
