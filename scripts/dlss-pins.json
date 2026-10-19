@@ -1,10 +1,8 @@
 {
-  "release_tag": "dlss-bundle-v310.6.0",
-  "url": "https://github.com/RemixProjGroup/dxvk-remix-dlss-bundle/releases/download/dlss-bundle-v310.6.0/dlss-bundle-v310.6.0.zip",
-  "sha256": "AA5092FD4136CC981A5E7B7507224FAF17A07B9FD7325E26B056F9600B944131",
-  "dlls": [
-    "nvngx_dlss.dll",
-    "nvngx_dlssd.dll",
-    "nvngx_dlssg.dll"
+  "release_tag": "NVIDIA/DLSS v310.9.16",
+  "files": [
+    { "name": "nvngx_dlss.dll",  "url": "https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.16/lib/Windows_x86_64/rel/nvngx_dlss.dll",  "sha256": "D00B5B0AB29C3CA101B70C3A5ECB3A01B7EF33766A3383A28A18623083E6123E" },
+    { "name": "nvngx_dlssd.dll", "url": "https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.16/lib/Windows_x86_64/rel/nvngx_dlssd.dll", "sha256": "B49435AE346F227FEAFE7BBE937D88277EA0EE7323975EC06488F377FDB46CEE" },
+    { "name": "nvngx_dlssg.dll", "url": "https://raw.githubusercontent.com/NVIDIA/DLSS/v310.9.16/lib/Windows_x86_64/rel/nvngx_dlssg.dll", "sha256": "8D59D49B36410DD6B62FEF2503A5871D347415BD85D943FA0848563A95DD50C7" }
   ]
 }
