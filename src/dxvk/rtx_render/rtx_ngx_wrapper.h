@@ -321,7 +321,8 @@ namespace dxvk {
       Rc<DxvkContext> renderContext,
       VkCommandBuffer commandList,
       uint32_t displayOutSize[2],
-      VkFormat outputFormat
+      VkFormat outputFormat,
+      bool litePreset // [nfs2se 0024]
       );
 
     // interpolates one frame

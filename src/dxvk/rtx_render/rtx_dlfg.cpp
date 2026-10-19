@@ -4,6 +4,7 @@
 
 #include <dxvk_dlfg_hud_composite.h> // [nfs2se 0021]
 
+#include <algorithm> // [nfs2se 0024] std::search
 #include <cstdio>
 
 namespace {
@@ -100,6 +101,35 @@ namespace dxvk {
     }
     TerminateProcess(GetCurrentProcess(), 82);
     for (;;) { }
+  }
+
+  // [nfs2se 0024] rtx.dlfg.litePreset = True needs a DLSS-G DLL that reads DLSSG.LiteCandidateBlendingEnabled; an older one
+  // ignores the parameter silently and runs the Full model. Probe: the loaded nvngx_dlssg.dll carries the key string
+  // (310.9.16 does, 310.6.0 does not). shortcut: string presence, not proof the model ran; the bench frame time is that proof.
+  static void nfs2seRequireLiteDll() {
+    static const char kKey[] = "DLSSG.LiteCandidateBlendingEnabled";
+    const HMODULE mod = GetModuleHandleA("nvngx_dlssg.dll");
+    char path[MAX_PATH] = "(not loaded)";
+    if (mod != nullptr) {
+      GetModuleFileNameA(mod, path, MAX_PATH);
+      const auto* base = reinterpret_cast<const uint8_t*>(mod);
+      const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+      const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+      const IMAGE_SECTION_HEADER* sec = IMAGE_FIRST_SECTION(nt);
+      for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i, ++sec) {
+        if (!(sec->Characteristics & IMAGE_SCN_MEM_READ)) {
+          continue;
+        }
+        const uint8_t* begin = base + sec->VirtualAddress;
+        const uint8_t* end = begin + sec->Misc.VirtualSize;
+        if (std::search(begin, end, kKey, kKey + sizeof(kKey) - 1) != end) {
+          Logger::info(str::format("DLFG: Lite model requested (rtx.dlfg.litePreset = True); ", path, " reads ", kKey));
+          return;
+        }
+      }
+    }
+    dlfgFatal(str::format("rtx.dlfg.litePreset = True, but the loaded DLSS-G DLL ", path,
+                          " does not know the Lite model (no ", kKey, "; DLSS-G 310.9.16 or newer is needed)"));
   }
 
   void DxvkDLFGCommandList::submit() {
@@ -1579,10 +1609,17 @@ namespace dxvk {
       }
 
       m_dlfgContext->releaseNGXFeature();
+      const bool lite = litePreset(); // [nfs2se 0024]
       m_dlfgContext->initialize(ctx,
                                 commandList->getCmdBuffer(),
                                 m_currentDisplaySize,
-                                outputImage->info().format);
+                                outputImage->info().format,
+                                lite);
+      if (lite) {
+        nfs2seRequireLiteDll();
+      }
+      Logger::info(str::format("DLFG: feature created ", m_currentDisplaySize[0], "x", m_currentDisplaySize[1],
+                               ", model ", lite ? "Lite (rtx.dlfg.litePreset = True)" : "Full"));
       m_contextDirty = false;
     }
 

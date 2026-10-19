@@ -784,11 +784,19 @@ namespace dxvk
   void NGXDLFGContext::initialize(Rc<DxvkContext> renderContext,
                                   VkCommandBuffer commandList,
                                   uint32_t displayOutSize[2],
-                                  VkFormat outputFormat) {
+                                  VkFormat outputFormat,
+                                  bool litePreset) {
     NVSDK_NGX_DLSSG_Create_Params createParams = { };
     createParams.Width = displayOutSize[0];
     createParams.Height = displayOutSize[1];
     createParams.NativeBackbufferFormat = outputFormat;
+
+    // [nfs2se 0024] DLFG Lite, as NVIDIA dxvk-remix 09808cc7: a create-time parameter of DLSS-G 310.9.16
+    // (NVSDK_NGX_DLSSG_Parameter_LiteCandidateBlendingEnabled in NVIDIA/DLSS v310.9.16; the bundled dlfg@4 headers predate it).
+    // Set only when asked, so the Full path is the stock create.
+    if (litePreset) {
+      m_parameters->Set("DLSSG.LiteCandidateBlendingEnabled", 1u);
+    }
 
     NVSDK_NGX_Result result = NGX_VK_CREATE_DLSSG(commandList,
                                                   1, // InCreationNodeMask

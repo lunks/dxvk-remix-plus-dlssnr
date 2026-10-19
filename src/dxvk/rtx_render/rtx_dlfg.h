@@ -328,6 +328,9 @@ namespace dxvk {
                     args.minValue = 1, args.maxValue = 6,
                     args.flags = RtxOptionFlags::UserSetting);
     RTX_OPTION("rtx.dlfg", bool, enablePresentMetering, true, "Use hardware present metering for DLSS 4.0 frame generation instead of CPU pacing.");
+    // [nfs2se 0024] NVIDIA dxvk-remix 09808cc7's option and environment name; here read at feature creation (no live switch)
+    RTX_OPTION_ARGS("rtx.dlfg", bool, litePreset, false, "Selects the DLSS Frame Generation model. True: Lite (lightweight model). False: Full (standard model). Read when the frame generation feature is created; True with a DLSS-G DLL that does not know the Lite model stops the game (exit 82).",
+                    args.environment = "RTX_DLFG_LITE_PRESET");
     // [nfs2se 0021]
     RTX_OPTION("rtx.dlfg", bool, hudlessComposite, false, "Frame generation interpolates the frame as it was before the rasterized UI, and every generated frame gets the UI of the rendered frame composited back on top (no UI smear). Read when the frame generation presenter is created.");
 
