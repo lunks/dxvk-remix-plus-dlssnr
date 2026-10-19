@@ -1173,6 +1173,31 @@ namespace dxvk {
 
   void D3D9SwapChainEx::PresentImage(UINT SyncInterval) {
     ScopedCpuProfileZone();
+
+    // [nfs2se 0021] the staging image for HUD-less frame generation follows the backbuffer; created (or dropped) before the flush below so the
+    // CS thread learns it before the present blit reads it; the first frame after a change interpolates without it (hudless = false)
+    {
+      const Rc<DxvkImage> bb = m_hudlessViews.empty() ? nullptr : m_backBuffers[0]->GetCommonTexture()->GetImage();
+      const bool stale = m_hudlessStaging != nullptr
+        && (bb == nullptr || m_hudlessStaging->info().extent != bb->info().extent || m_hudlessStaging->info().format != bb->info().format);
+      if (stale || (bb != nullptr && m_hudlessStaging == nullptr)) {
+        m_hudlessStaging = nullptr;
+        m_hudlessStagingView = nullptr;
+        if (bb != nullptr) {
+          m_hudlessStaging = m_device->createImage(bb->info(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, DxvkMemoryStats::Category::RTXRenderTarget, "nfs2se HUD-less staging");
+          m_hudlessStagingView = m_device->createImageView(m_hudlessStaging, m_backBuffers[0]->GetImageView(false)->info());
+          Logger::info(str::format("DLFG: HUD-less frame generation on (rtx.dlfg.hudlessComposite), ", bb->info().extent.width, "x", bb->info().extent.height,
+                                   ", ", m_hudlessViews.size(), " HUD-less backbuffers"));
+        }
+        m_parent->EmitCs([cImage = m_hudlessStaging] (DxvkContext* ctx) {
+          if (cImage != nullptr) {
+            ctx->initImage(cImage, { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }, VK_IMAGE_LAYOUT_UNDEFINED);
+          }
+          ctx->getCommonObjects()->metaDLFG().setHudlessStaging(cImage);
+        });
+      }
+    }
+
     m_parent->Flush();
 
     // NV-DXVK start: Reflex integration
@@ -1248,6 +1273,13 @@ namespace dxvk {
       m_blitter->presentImage(m_context.ptr(),
         m_imageViews.at(imageIndex), dstRect,
         swapImageView, srcRect);
+
+      // [nfs2se 0021] the same blit, from the HUD-less staging copy into this backbuffer's HUD-less twin
+      if (m_hudlessStagingView != nullptr && imageIndex < m_hudlessViews.size() && m_hudlessViews[imageIndex] != nullptr) {
+        m_blitter->presentImage(m_context.ptr(),
+          m_hudlessViews[imageIndex], dstRect,
+          m_hudlessStagingView, srcRect);
+      }
 
       if (m_hud != nullptr)
         m_hud->render(m_context, info.format, info.imageExtent);
@@ -1573,6 +1605,18 @@ namespace dxvk {
 
       m_imageViews[i] = new DxvkImageView(
         m_device->vkd(), image, viewInfo);
+    }
+
+    // [nfs2se 0021] wrap the presenter's HUD-less twins exactly like its backbuffers
+    m_hudlessViews.clear();
+    if (m_dlfgPresenter != nullptr && m_dlfgPresenter->getHudlessImage(0) != VK_NULL_HANDLE) {
+      m_hudlessViews.resize(info.imageCount);
+      for (uint32_t i = 0; i < info.imageCount; i++) {
+        const VkImage hudless = m_dlfgPresenter->getHudlessImage(i);
+        if (hudless != VK_NULL_HANDLE) {
+          m_hudlessViews[i] = new DxvkImageView(m_device->vkd(), new DxvkImage(m_device.ptr(), imageInfo, hudless), viewInfo);
+        }
+      }
     }
   }
 

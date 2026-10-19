@@ -829,7 +829,11 @@ namespace dxvk {
         dispatchDebugView(srcImage, rtOutput, captureScreenImage);
         if (nfs2seGpuTimers) { s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 8); } // [nfs2se 0015]
 
-        dispatchDLFG();
+        // [nfs2se 0021] the HUD-less staging copy exists only while the DLFG presenter has HUD-less twins (rtx.dlfg.hudlessComposite)
+        const Rc<DxvkImage> hudlessStaging = isDLFGEnabled() ? m_common->metaDLFG().getHudlessStaging() : nullptr;
+        const bool hudless = hudlessStaging != nullptr && hudlessStaging->info().extent == srcImage->info().extent;
+
+        dispatchDLFG(hudless);
 
         // Match FSR-3.1 sequencing: configure/prepare frame generation before final game-target blit.
         fork_hooks::dispatchFsrFrameGeneration(*this, srcImage);
@@ -842,6 +846,10 @@ namespace dxvk {
           // so we can use the same blit with nearest neighbor filtering
           assert(srcImage->info().extent == targetImage->info().extent);
           blitImageHelper(this, srcImage, targetImage, VkFilter::VK_FILTER_NEAREST);
+          if (hudless) {
+            // [nfs2se 0021] the same blit into the HUD-less staging image: the game target gets the UI on top, this one never does
+            blitImageHelper(this, srcImage, hudlessStaging, VkFilter::VK_FILTER_NEAREST);
+          }
         }
         if (nfs2seGpuTimers) { // [nfs2se 0015]
           s_nfs2seGpuTimer.mark(getCmdBuffer(DxvkCmdBuffer::ExecBuffer), 9);
@@ -2269,7 +2277,7 @@ namespace dxvk {
       color);
   }
 
-  void RtxContext::dispatchDLFG() {
+  void RtxContext::dispatchDLFG(bool hudless) {
     if (!isDLFGEnabled()) {
       return;
     }
@@ -2292,6 +2300,7 @@ namespace dxvk {
       false,
       m_common->metaDLFG().getInterpolatedFrameCount(),
     };
+    dlfgInfo.hudless = hudless;  // [nfs2se 0021]
     m_device->setupFrameInterpolation(dlfgInfo);
   }
 

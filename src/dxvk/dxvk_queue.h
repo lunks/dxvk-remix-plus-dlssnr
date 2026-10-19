@@ -80,6 +80,8 @@ namespace dxvk {
     bool              resetHistory;
     // number of requested interpolated frames; must be at least 1, actual count may be lower depending on hardware support for MFG
     uint32_t          interpolatedFrameCount = 0;
+    // [nfs2se 0021] the D3D9 present blit filled the presenter's HUD-less twin of this frame's backbuffer
+    bool              hudless = false;
     
     bool valid() const {
       return motionVectors.ptr() &&
@@ -92,6 +94,7 @@ namespace dxvk {
       depth = nullptr;
       resetHistory = false;
       interpolatedFrameCount = 0;
+      hudless = false;
     }
   };
   // NV-DXVK end
