@@ -38,6 +38,9 @@ Texture2D<uint> PrimarySurfaceFlags;
 [[vk::binding(POST_FX_MOTION_BLUR_PRIMARY_LINEAR_VIEW_Z_INPUT)]]
 Texture2D<float> PrimaryLinearViewZ;
 
+[[vk::binding(POST_FX_MOTION_BLUR_PRIMARY_ALBEDO_INPUT)]]
+Texture2D<float4> PrimaryAlbedo;      // [nfs2se 0029] render resolution
+
 [[vk::binding(POST_FX_MOTION_BLUR_INPUT)]]
 Texture2D<float4> InColorTexture;
 
@@ -117,6 +120,8 @@ float3 calculatedBlurredColor(
   const uint2  pixelPos,
   const float2 uv,
   const float4 centerColor,
+  const float3 centerAlbedo,
+  inout float3 blurredAlbedo,
   const float  centerDepth,
   const uint   sampleCount,
   const float2 adjustedVelocity,
@@ -125,6 +130,7 @@ float3 calculatedBlurredColor(
   const float2 stepSize = adjustedVelocity / (float)sampleCount;
 
   float4 blurredColor = centerColor;
+  float3 albedoSum = centerAlbedo;      // [nfs2se 0029] same weights as the colour
   float2 currentTexCoord[2] = { uv, uv };
 
   [unroll]
@@ -166,9 +172,15 @@ float3 calculatedBlurredColor(
       const float  reconstructionWeight = calculateReconstructionWeight(uv, adjustedVelocity, centerDepth, texCoord, sampleVelocity, sampleDepth, 0.01f);
 
       blurredColor += sampleColor * reconstructionWeight;
+      // [nfs2se 0029] the albedo under the same sample (bilinear: it is at the render resolution)
+      if (cb.motionBlurPreserveLighting > 0.0f)
+      {
+        albedoSum += PrimaryAlbedo.SampleLevel(LinearSampler, texCoord, 0.0f).rgb * (isMotionBlurMultiplier * reconstructionWeight);
+      }
     }
   }
   blurredColor.rgb /= blurredColor.w;
+  blurredAlbedo = albedoSum / blurredColor.w;
 
   return blurredColor.rgb;
 }
@@ -207,8 +219,21 @@ void main(
   }
 
   const float minimunVelocityLength = length(minimunVelocity);
-  const float3 blurredColor = calculatedBlurredColor(
-    pixelPos, uv, centerColor, centerDepth, cb.motionBlurSampleCount, adjustedVelocity, minimunVelocityLength);
+  const float3 centerAlbedo = cb.motionBlurPreserveLighting > 0.0f ? PrimaryAlbedo.SampleLevel(LinearSampler, uv, 0.0f).rgb : float3(0.0f);
+  float3 blurredAlbedo = centerAlbedo;
+  float3 blurredColor = calculatedBlurredColor(
+    pixelPos, uv, centerColor, centerAlbedo, blurredAlbedo, centerDepth, cb.motionBlurSampleCount, adjustedVelocity, minimunVelocityLength);
+
+  // [nfs2se 0029] motionBlurPreserveLighting: keep the pixel's own lighting, streak only the albedo.  The colour is lighting x albedo, so the albedo's streak is colour x (blurred albedo / albedo); where the albedo is
+  // (nearly) black (lamps, tyres, unset albedo) the ratio is meaningless and the stock blur applies.
+  if (cb.motionBlurPreserveLighting > 0.0f)
+  {
+    const float centerAlbedoLuma = dot(centerAlbedo, float3(0.2126f, 0.7152f, 0.0722f));
+    const float3 ratio = clamp(blurredAlbedo / max(centerAlbedo, float3(0.02f)), float3(0.25f), float3(4.0f));
+    const float3 albedoStreak = centerColor.rgb * ratio;
+    const float mixAmount = cb.motionBlurPreserveLighting * smoothstep(0.02f, 0.1f, centerAlbedoLuma);
+    blurredColor = lerp(blurredColor, albedoStreak, mixAmount);
+  }
 
   OutColorTexture[pixelPos] = float4(blurredColor, 1.0f);
 }

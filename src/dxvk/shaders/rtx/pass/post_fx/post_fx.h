@@ -32,6 +32,7 @@
 #define POST_FX_MOTION_BLUR_OUTPUT                            5
 #define POST_FX_MOTION_BLUR_NEAREST_SAMPLER                   6
 #define POST_FX_MOTION_BLUR_LINEAR_SAMPLER                    7
+#define POST_FX_MOTION_BLUR_PRIMARY_ALBEDO_INPUT              8      // [nfs2se 0029]
 
 #define POST_FX_INPUT  0
 #define POST_FX_OUTPUT 1
@@ -75,6 +76,7 @@ struct PostFxArgs {
   bool   enableMotionBlurEmissive;
   float  jitterStrength;
   float  motionBlurDlfgDeduction;
+  float  motionBlurPreserveLighting;      // [nfs2se 0029]
 };
 
 struct PostFxMotionBlurPrefilterArgs {

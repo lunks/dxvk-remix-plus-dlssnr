@@ -64,6 +64,7 @@ namespace dxvk {
         TEXTURE2D(POST_FX_MOTION_BLUR_PRIMARY_SCREEN_SPACE_MOTION_INPUT)
         TEXTURE2D(POST_FX_MOTION_BLUR_PRIMARY_SURFACE_FLAGS_INPUT)
         TEXTURE2D(POST_FX_MOTION_BLUR_PRIMARY_LINEAR_VIEW_Z_INPUT)
+        TEXTURE2D(POST_FX_MOTION_BLUR_PRIMARY_ALBEDO_INPUT)
         TEXTURE2DARRAY(POST_FX_MOTION_BLUR_BLUE_NOISE_TEXTURE_INPUT)
         TEXTURE2D(POST_FX_MOTION_BLUR_INPUT)
         SAMPLER(POST_FX_MOTION_BLUR_NEAREST_SAMPLER)
@@ -128,6 +129,7 @@ namespace dxvk {
         RemixGui::DragFloat("Blur Diameter Fraction", &blurDiameterFractionObject(), 0.001f, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Minimum Velocity Threshold (unit: pixel)", &motionBlurMinimumVelocityThresholdInPixelObject(), 0.01f, 0.01f, 3.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Dynamic Deduction", &motionBlurDynamicDeductionObject(), 0.001f, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+        RemixGui::DragFloat("Motion Blur Preserve Lighting", &motionBlurPreserveLightingObject(), 0.01f, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Jitter Strength", &motionBlurJitterStrengthObject(), 0.001f, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
       }
 
@@ -205,6 +207,8 @@ namespace dxvk {
     ctx->bindResourceView(POST_FX_MOTION_BLUR_PRIMARY_SCREEN_SPACE_MOTION_INPUT, rtOutput.m_primaryScreenSpaceMotionVector.view, nullptr);
     ctx->bindResourceView(POST_FX_MOTION_BLUR_PRIMARY_SURFACE_FLAGS_INPUT, rtOutput.m_primarySurfaceFlagsIntermediateTexture2.view(Resources::AccessType::Read), nullptr);
     ctx->bindResourceView(POST_FX_MOTION_BLUR_PRIMARY_LINEAR_VIEW_Z_INPUT, rtOutput.m_primaryLinearViewZ.view, nullptr);
+    // [nfs2se 0029] the primary albedo (render resolution), for motionBlurPreserveLighting
+    ctx->bindResourceView(POST_FX_MOTION_BLUR_PRIMARY_ALBEDO_INPUT, rtOutput.m_primaryAlbedo.view, nullptr);
     ctx->bindResourceView(POST_FX_MOTION_BLUR_BLUE_NOISE_TEXTURE_INPUT, ctx->getResourceManager().getBlueNoiseTexture(ctx), nullptr);
     ctx->bindResourceView(POST_FX_MOTION_BLUR_INPUT, motionBlurInputTexture.view, nullptr);
     ctx->bindResourceView(POST_FX_MOTION_BLUR_OUTPUT, motionBlurOutputTexture.view, nullptr);
@@ -295,6 +299,7 @@ namespace dxvk {
     postFxArgs.blurDiameterFraction = blurDiameterFraction();
     postFxArgs.motionBlurMinimumVelocityThresholdInPixel = motionBlurMinimumVelocityThresholdInPixel();
     postFxArgs.motionBlurDynamicDeduction = motionBlurDynamicDeduction();
+    postFxArgs.motionBlurPreserveLighting = motionBlurPreserveLighting();
     postFxArgs.jitterStrength = motionBlurJitterStrength();
     postFxArgs.motionBlurDlfgDeduction = ctx->isDLFGEnabled() ?
       1.0f / static_cast<float>(ctx->dlfgInterpolatedFrameCount() + 1) : 1.0f;

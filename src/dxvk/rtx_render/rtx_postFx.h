@@ -98,6 +98,8 @@ namespace dxvk {
     RTX_OPTION("rtx.postfx", float, blurDiameterFraction, 0.02f, "The diameter of the circle that motion blur samplings occur. Motion vectors beyond this circle will be clamped.");
     RTX_OPTION("rtx.postfx", float, motionBlurMinimumVelocityThresholdInPixel, 1.0f, "The minimum motion vector distance that enable the motion blur. The unit is pixel size.");
     RTX_OPTION("rtx.postfx", float, motionBlurDynamicDeduction, 1.0f, "The deduction of motion blur for dynamic objects.");
+    // [nfs2se 0029]
+    RTX_OPTION("rtx.postfx", float, motionBlurPreserveLighting, 0.0f, "0 = stock: the blur streaks the final colour along the surface motion vector, so a shadow or a reflection that is fixed on screen (the shadow of a car in a chase view) is smeared with the ground it lies on. 1 = the blur streaks only the primary ALBEDO along the motion vector and keeps the pixel's own lighting (colour x blurred albedo / albedo): textures and markings streak, lighting does not. Values between mix the two.");
     RTX_OPTION("rtx.postfx", float, motionBlurJitterStrength, 0.6f, "The jitter strength of every sample along the motion vector.");
     RTX_OPTION("rtx.postfx", float, chromaticAberrationAmount, 0.02f, "The strength of chromatic aberration.");
     RTX_OPTION("rtx.postfx", float, chromaticCenterAttenuationAmount, 0.975f, "Control the amount of chromatic aberration effect that attunuated when close to the center of screen.");
