@@ -128,6 +128,7 @@ namespace dxvk {
         RemixGui::DragFloat("Blur Diameter Fraction", &blurDiameterFractionObject(), 0.001f, 0.001f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Minimum Velocity Threshold (unit: pixel)", &motionBlurMinimumVelocityThresholdInPixelObject(), 0.01f, 0.01f, 3.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Dynamic Deduction", &motionBlurDynamicDeductionObject(), 0.001f, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+        RemixGui::DragFloat("Motion Blur Edge Preserve (EV)", &motionBlurEdgePreserveObject(), 0.01f, 0.0f, 4.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
         RemixGui::DragFloat("Motion Blur Jitter Strength", &motionBlurJitterStrengthObject(), 0.001f, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
       }
 
@@ -295,6 +296,7 @@ namespace dxvk {
     postFxArgs.blurDiameterFraction = blurDiameterFraction();
     postFxArgs.motionBlurMinimumVelocityThresholdInPixel = motionBlurMinimumVelocityThresholdInPixel();
     postFxArgs.motionBlurDynamicDeduction = motionBlurDynamicDeduction();
+    postFxArgs.motionBlurEdgePreserve = motionBlurEdgePreserve();
     postFxArgs.jitterStrength = motionBlurJitterStrength();
     postFxArgs.motionBlurDlfgDeduction = ctx->isDLFGEnabled() ?
       1.0f / static_cast<float>(ctx->dlfgInterpolatedFrameCount() + 1) : 1.0f;

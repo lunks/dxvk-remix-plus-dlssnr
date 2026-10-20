@@ -75,6 +75,7 @@ struct PostFxArgs {
   bool   enableMotionBlurEmissive;
   float  jitterStrength;
   float  motionBlurDlfgDeduction;
+  float  motionBlurEdgePreserve;      // [nfs2se 0029]
 };
 
 struct PostFxMotionBlurPrefilterArgs {

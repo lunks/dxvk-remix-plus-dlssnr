@@ -163,7 +163,15 @@ float3 calculatedBlurredColor(
       const float4 sampleColor = float4(InColorTexture.SampleLevel(NearestSampler, texCoord, 0.0f).rgb, 1.0f) * isMotionBlurMultiplier;
       const float2 sampleVelocity = PrimaryScreenSpaceMotionVector.SampleLevel(NearestSampler, texCoord, 0.0f).xy * cb.invMainCameraResolution;
       const float  sampleDepth = PrimaryLinearViewZ.SampleLevel(NearestSampler, texCoord, 0.0f);
-      const float  reconstructionWeight = calculateReconstructionWeight(uv, adjustedVelocity, centerDepth, texCoord, sampleVelocity, sampleDepth, 0.01f);
+      float  reconstructionWeight = calculateReconstructionWeight(uv, adjustedVelocity, centerDepth, texCoord, sampleVelocity, sampleDepth, 0.01f);
+
+      // [nfs2se 0029] motionBlurEdgePreserve: leave out a sample whose luminance is more than `motionBlurEdgePreserve` stops away from the pixel's own (weight 1 at equal, 0 at the limit)
+      if (cb.motionBlurEdgePreserve > 0.0f)
+      {
+        const float centerLuma = max(dot(centerColor.rgb, float3(0.2126f, 0.7152f, 0.0722f)), 1e-4f);
+        const float sampleLuma = max(dot(sampleColor.rgb, float3(0.2126f, 0.7152f, 0.0722f)), 1e-4f);
+        reconstructionWeight *= saturate(1.0f - abs(log2(sampleLuma / centerLuma)) / cb.motionBlurEdgePreserve);
+      }
 
       blurredColor += sampleColor * reconstructionWeight;
     }
