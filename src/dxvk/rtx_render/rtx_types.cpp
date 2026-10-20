@@ -153,6 +153,7 @@ namespace dxvk {
     // dirty bits so downstream update logic that gates individual steps on
     // specific bits runs the full update on the RI's first submission.
     dirtyFlags = kAllDirtyFlags;
+    hostIdentity = key.hostIdentity; // [nfs2se 0030]
   }
 
   void ReplacementInstance::setup(PrimInstance newRoot, size_t numPrims,

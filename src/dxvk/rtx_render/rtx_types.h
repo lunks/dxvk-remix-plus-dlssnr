@@ -135,6 +135,8 @@ struct ReplacementInstance {
     // so they don't churn dirty flags.
     Matrix4 textureTransform = Matrix4();
     TexGenMode texgenMode = TexGenMode::None;
+    // [nfs2se 0030] The host's identity of an API instance (remixapi_InstanceInfoIdentityEXT); 0 = none.
+    uint64_t hostIdentity = 0;
   };
 
   ReplacementInstance() = delete;
@@ -216,6 +218,8 @@ struct ReplacementInstance {
   // [nfs2se 0007] Keep of this RI when it is not drawn, from the API's remixapi_InstanceInfoLifetimeEXT
   // (0 = rtx.numFramesToKeepInstances). Set by every external draw that matches the RI.
   uint32_t framesToKeep = 0;
+  // [nfs2se 0030] The host identity this RI was created under: the level-2 match takes only a candidate of the same one.
+  uint64_t hostIdentity = 0;
 
   // When true, the aggregate object-space bounding boxes (geometryBoundingBox,
   // lightBoundingBox) will be recomputed from the replacement mesh/light data

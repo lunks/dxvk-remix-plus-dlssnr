@@ -99,6 +99,7 @@ namespace pnext::detail {
     remixapi_CameraInfoParameterizedEXT,
     remixapi_CameraMediumInfo,
     remixapi_InstanceInfoPrevTransformEXT,
+    remixapi_InstanceInfoIdentityEXT,
     remixapi_TextureInfo
   >;
 
@@ -129,10 +130,12 @@ namespace pnext::detail {
   template<> constexpr auto ToEnum< remixapi_CameraInfoParameterizedEXT     > = REMIXAPI_STRUCT_TYPE_CAMERA_INFO_PARAMETERIZED_EXT;
   template<> constexpr auto ToEnum< remixapi_CameraMediumInfo               > = REMIXAPI_STRUCT_TYPE_CAMERA_MEDIUM_INFO;
   template<> constexpr auto ToEnum< remixapi_InstanceInfoPrevTransformEXT   > = REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_PREV_TRANSFORM_EXT;
+  template<> constexpr auto ToEnum< remixapi_InstanceInfoIdentityEXT        > = REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_IDENTITY_EXT;
   template<> constexpr auto ToEnum< remixapi_TextureInfo                    > = REMIXAPI_STRUCT_TYPE_TEXTURE_INFO;
 
   template< typename T > struct Root                                         { using Type = T; /* by default, a root is self */ };
   template<>           struct Root< remixapi_InstanceInfoPrevTransformEXT   >{ using Type = remixapi_InstanceInfo;              };
+  template<>           struct Root< remixapi_InstanceInfoIdentityEXT        >{ using Type = remixapi_InstanceInfo;              };
   template<>           struct Root< remixapi_MaterialInfoPortalEXT          >{ using Type = remixapi_MaterialInfo;              };
   template<>           struct Root< remixapi_MaterialInfoTranslucentEXT     >{ using Type = remixapi_MaterialInfo;              };
   template<>           struct Root< remixapi_MaterialInfoOpaqueEXT          >{ using Type = remixapi_MaterialInfo;              };

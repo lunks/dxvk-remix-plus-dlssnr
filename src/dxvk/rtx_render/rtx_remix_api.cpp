@@ -964,6 +964,9 @@ std::unique_ptr<dxvk::ExternalDrawState> dxvk::RemixAPIPrivateAccessor::toRtDraw
   if (auto extLifetime = pnext::find<remixapi_InstanceInfoLifetimeEXT>(&info)) {
     state->framesToKeep = extLifetime->framesToKeep;
   }
+  if (auto extIdentity = pnext::find<remixapi_InstanceInfoIdentityEXT>(&info)) { // [nfs2se 0030]
+    state->hostIdentity = extIdentity->identity;
+  }
 
   state->mesh = info.mesh;
   state->cameraType = cameraType;

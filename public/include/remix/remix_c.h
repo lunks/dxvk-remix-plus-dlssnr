@@ -146,6 +146,8 @@ extern "C" {
     //       as that will break backwards compatibility.
     // [nfs2se 0013] Far from the upstream range (0007 uses 0x4E460001).
     REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_PREV_TRANSFORM_EXT     = 0x4E460002,
+    // [nfs2se 0030] Far from the upstream range (0007 0x4E460001, 0013 0x4E460002).
+    REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_IDENTITY_EXT           = 0x4E460003,
   } remixapi_StructType;
 
   typedef enum remixapi_ErrorCode {
@@ -623,6 +625,17 @@ extern "C" {
     void*                     pNext;
     remixapi_Transform        prevTransform;
   } remixapi_InstanceInfoPrevTransformEXT;
+
+  // [nfs2se 0030] The host's own identity of an instance. Remix matches an API draw to last frame's instance by
+  // (mesh handle, material) and then the NEAREST position; two objects that share a mesh (two cars of one model and
+  // paint) and pass close to each other can take each other's instance (wrong motion vectors, a doubled picture).
+  // With a non-zero identity a draw matches only an instance of the same identity (0 = the old matching).
+  // A host probes support by setting the option rtx.capiInstanceIdentityExt (an older runtime skips the struct).
+  typedef struct remixapi_InstanceInfoIdentityEXT {
+    remixapi_StructType       sType;
+    void*                     pNext;
+    uint64_t                  identity;
+  } remixapi_InstanceInfoIdentityEXT;
 
 
   typedef struct remixapi_LightInfoLightShaping {

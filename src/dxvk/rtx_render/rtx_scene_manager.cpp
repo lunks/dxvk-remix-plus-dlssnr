@@ -2447,13 +2447,17 @@ namespace dxvk {
     // so the same ReplacementInstance can be threaded through both paths —
     // drawReplacements() requires a non-null instance and uses it to drive
     // RtInstance reuse across frames for the replacement primitives.
-    const XXH64_hash_t identityHash = state.computeExternalDrawIdentityHash();
+    // [nfs2se 0030] the host identity is part of the exact identity too (two host objects never share an RI)
+    const XXH64_hash_t identityHash = state.hostIdentity
+      ? XXH3_64bits_withSeed(&state.hostIdentity, sizeof(state.hostIdentity), state.computeExternalDrawIdentityHash())
+      : state.computeExternalDrawIdentityHash();
     const XXH64_hash_t spatialMapHash = spatialMapHashForExternalDrawMesh(state.mesh);
     const Matrix4& xform = state.drawCall.getTransformData().objectToWorld;
     const XXH64_hash_t matHash = state.drawCall.getMaterialData().getHash();
     const Vector3 worldPos = xform[3].xyz();
 
-    const ReplacementInstance::LookupKey externalKey { identityHash, spatialMapHash, matHash, kEmptyHash, worldPos, xform };
+    ReplacementInstance::LookupKey externalKey { identityHash, spatialMapHash, matHash, kEmptyHash, worldPos, xform };
+    externalKey.hostIdentity = state.hostIdentity; // [nfs2se 0030]
     ReplacementInstance* replacementInstance = m_drawCallTracker.findOrCreateReplacementInstance(externalKey);
     replacementInstance->dirtyFlags.clr(ReplacementInstance::kDynamicFeatureMask);
     replacementInstance->framesToKeep = state.framesToKeep; // [nfs2se 0007]

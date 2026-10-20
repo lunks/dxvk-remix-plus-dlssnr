@@ -501,6 +501,8 @@ namespace dxvk {
     } displacement;
 
     RTX_OPTION("rtx", bool, resolvePreCombinedMatrices, true, "");
+    // [nfs2se 0030] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoIdentityEXT is honoured.
+    RTX_OPTION("rtx", uint32_t, capiInstanceIdentityExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoIdentityEXT (an API instance matches only last frame's instance of the same host identity).");
     // [nfs2se 0013] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoPrevTransformEXT is honoured.
     RTX_OPTION("rtx", uint32_t, capiInstancePrevTransformExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoPrevTransformEXT (the previous object-to-world of a new API instance, so its first frame has motion).");
 

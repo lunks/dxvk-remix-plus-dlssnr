@@ -201,7 +201,8 @@ namespace dxvk {
 
     auto l2Filter = [&](const ReplacementInstance* candidate) {
       return candidate->frameLastSeen != currentFrameId &&
-             candidate->materialHash == key.materialHash;
+             candidate->materialHash == key.materialHash &&
+             candidate->hostIdentity == key.hostIdentity; // [nfs2se 0030] never another host object's instance
     };
 
     auto spatialMapIter = m_assetSpatialMaps.find(key.spatialMapHash);
