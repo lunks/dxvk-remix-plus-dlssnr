@@ -746,6 +746,9 @@ namespace dxvk {
     if (oldType == type && !force) {
       return;
     }
+
+    // [nfs2se 0028] the owner's test reads this from the log: a hotkey that fired is a line here (0 = None, 1 = Basic / user menu, 2 = Advanced, 3 = first-use guide)
+    Logger::info(str::format("[nfs2se-ui] menu ", static_cast<int>(oldType), " -> ", static_cast<int>(type)));
     
     if (type == UIType::None) {
       onCloseMenus();

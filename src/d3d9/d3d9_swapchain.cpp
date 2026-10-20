@@ -1270,16 +1270,18 @@ namespace dxvk {
         { uint32_t(m_dstRect.right - m_dstRect.left), uint32_t(m_dstRect.bottom - m_dstRect.top) } };
       
 
-      m_blitter->presentImage(m_context.ptr(),
-        m_imageViews.at(imageIndex), dstRect,
-        swapImageView, srcRect);
-
-      // [nfs2se 0021] the same blit, from the HUD-less staging copy into this backbuffer's HUD-less twin
+      // [nfs2se 0021] the blit from the HUD-less staging copy into this backbuffer's HUD-less twin.  [nfs2se 0028] It comes FIRST: presentImage leaves
+      // its destination bound as the render target, and the Remix menu (gui.render) and the DXVK HUD draw into whatever is bound.  After the
+      // twin blit they drew into the twin, not into the backbuffer: the menu was never shown and the composite erased what it drew.
       if (m_hudlessStagingView != nullptr && imageIndex < m_hudlessViews.size() && m_hudlessViews[imageIndex] != nullptr) {
         m_blitter->presentImage(m_context.ptr(),
           m_hudlessViews[imageIndex], dstRect,
           m_hudlessStagingView, srcRect);
       }
+
+      m_blitter->presentImage(m_context.ptr(),
+        m_imageViews.at(imageIndex), dstRect,
+        swapImageView, srcRect);
 
       if (m_hud != nullptr)
         m_hud->render(m_context, info.format, info.imageExtent);
