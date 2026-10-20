@@ -2278,6 +2278,14 @@ namespace dxvk {
                "NEE path only. Default on as of C7 (2026-05-13) -- terrain "
                "now shows cumulus-shaped drifting shadow patches matching "
                "cloud positions overhead.");
+    // Patch 0027 (capifix17, NFS2 SE): the clouds are anchored to the WORLD by the camera's position
+    // (samplePos = camera + viewDir * t), so the same sky direction shows other clouds from another
+    // place. False = the camera position is left out: the cloud field depends on the view direction
+    // and on time (wind) only, like a skybox. True = the 1.5.1 behaviour.
+    RTX_OPTION("rtx.atmosphere", bool, cloudWorldAnchor, true,
+               "Anchor the cloud field to the world through the camera's position. False = the clouds are a "
+               "function of the view direction and time only (no parallax, the same sky from every place). "
+               "Default True: clouds are fixed in the world, moving the camera moves through them.");
     RTX_OPTION("rtx.atmosphere", float, cloudShadowMarchStrength, 1.0f,
                "Beer-Lambert exponent multiplier applied to the D_sun voxel "
                "grid lookup inside sampleCloudGroundShadow_OptionB. 1.0 = "

@@ -983,7 +983,10 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
     // Column presence feather band riding the former pad_c6_0 slot (fork —
     // 2026-06-11, column-shaping rework); CB layout unchanged.
     args.cloudColumnFeather = RtxOptions::cloudColumnFeather();
-    args.cameraWorldPosYUpKm = m_cameraWorldPosYUpKm;
+    // Patch 0027 (capifix17): rtx.atmosphere.cloudWorldAnchor = False takes the camera out of the cloud
+    // sample position (samplePos = cameraWorldPosYUpKm + viewDir * t), so the cloud field is a function of the
+    // view direction and of time (wind) only: the same sky from every place on a track.
+    args.cameraWorldPosYUpKm = RtxOptions::cloudWorldAnchor() ? m_cameraWorldPosYUpKm : Vector3(0.0f, 0.0f, 0.0f);
     // Per-column downwelling-light sigma riding the former pad_c6_1 slot
     // (fork — 2026-06-12, column-shaping rev 3); CB layout unchanged.
     args.cloudUndersideLightSigma = RtxOptions::cloudUndersideLightSigma();
