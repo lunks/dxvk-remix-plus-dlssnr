@@ -334,6 +334,9 @@ namespace dxvk {
     // [nfs2se 0021]
     RTX_OPTION("rtx.dlfg", bool, hudlessComposite, false, "Frame generation interpolates the frame as it was before the rasterized UI, and every generated frame gets the UI of the rendered frame composited back on top (no UI smear). Read when the frame generation presenter is created.");
 
+    // [nfs2se 0031]
+    RTX_OPTION("rtx.dlfg", bool, raytracedRenderTargetFromRendered, false, "With rtx.dlfg.hudlessComposite: the pixels of the screen that shows a raytraced render target (rtx.raytracedRenderTarget.screenRect, set by the host) are not interpolated; every generated frame shows the rendered frame's picture there, like the UI. The picture is another camera's traced image: interpolating it with the scene's motion vectors cross-fades two pictures (a doubled, ghosted rear view). Read every frame.");
+
     // [nfs2se 0021] the HUD-less copy of the ray-traced frame, written by injectRTX, read by the D3D9 present blit; CS thread only
     void setHudlessStaging(const Rc<DxvkImage>& image) { m_hudlessStaging = image; }
 

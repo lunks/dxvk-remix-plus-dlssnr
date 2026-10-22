@@ -5,6 +5,7 @@
 #include <dxvk_dlfg_hud_composite.h> // [nfs2se 0021]
 
 #include <algorithm> // [nfs2se 0024] std::search
+#include <cmath> // [nfs2se 0031] std::floor / std::ceil
 #include <cstdio>
 
 namespace {
@@ -445,7 +446,7 @@ namespace dxvk {
       VkDescriptorSetLayoutCreateInfo setInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
       setInfo.bindingCount = 3;
       setInfo.pBindings = bindings;
-      VkPushConstantRange push = { VK_SHADER_STAGE_COMPUTE_BIT, 0, 2 * sizeof(uint32_t) };
+      VkPushConstantRange push = { VK_SHADER_STAGE_COMPUTE_BIT, 0, 2 * sizeof(uint32_t) + 4 * sizeof(int32_t) };  // [nfs2se 0031] extent + rect
       VkPipelineLayoutCreateInfo layoutInfo = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
       layoutInfo.setLayoutCount = 1;
       layoutInfo.pSetLayouts = &m_hudSetLayout;
@@ -617,11 +618,23 @@ namespace dxvk {
                         VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
     barriers.record(m_device, *commandList, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
+    // [nfs2se 0031] extent, then the render target screen's pixel rectangle (the host's rtx.raytracedRenderTarget.screenRect: fractions of the picture, x0 > x1 for a mirror image)
+    int32_t push[6] = { int32_t(m_info.imageExtent.width), int32_t(m_info.imageExtent.height), 0, 0, 0, 0 };
+    if (DxvkDLFG::raytracedRenderTargetFromRendered()) {
+      const Vector4 sr = RtxOptions::RaytracedRenderTarget::screenRect();
+      if (sr.x != sr.z && sr.y != sr.w) {
+        const float fx0 = std::min(sr.x, sr.z), fx1 = std::max(sr.x, sr.z), fy0 = std::min(sr.y, sr.w), fy1 = std::max(sr.y, sr.w);
+        push[2] = int32_t(std::floor(fx0 * float(m_info.imageExtent.width)));
+        push[3] = int32_t(std::floor(fy0 * float(m_info.imageExtent.height)));
+        push[4] = int32_t(std::ceil(fx1 * float(m_info.imageExtent.width)));
+        push[5] = int32_t(std::ceil(fy1 * float(m_info.imageExtent.height)));
+      }
+    }
     const uint32_t extent[2] = { m_info.imageExtent.width, m_info.imageExtent.height };
     const VkDescriptorSet set = m_hudSets[backbufferIndex * m_info.imageCount + swapchainIndex];
     vkd->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hudPipeline);
     vkd->vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_hudPipelineLayout, 0, 1, &set, 0, nullptr);
-    vkd->vkCmdPushConstants(cmd, m_hudPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(extent), extent);
+    vkd->vkCmdPushConstants(cmd, m_hudPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     vkd->vkCmdDispatch(cmd, (extent[0] + 7) / 8, (extent[1] + 7) / 8, 1);
 
     commandList->trackResource<DxvkAccess::Read>(m_backbufferViews[backbufferIndex]);

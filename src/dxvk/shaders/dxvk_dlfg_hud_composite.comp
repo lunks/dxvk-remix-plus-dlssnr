@@ -14,6 +14,8 @@ layout(set = 0, binding = 2) writeonly uniform image2D o_generated;
 
 layout(push_constant) uniform push_t {
   uvec2 extent;
+  ivec2 rectMin;   // [nfs2se 0031] the screen's pixel rectangle, half open (rectMax <= rectMin = none); two ivec2, not an ivec4: no std430 padding
+  ivec2 rectMax;
 };
 
 void main() {
@@ -25,8 +27,12 @@ void main() {
   const vec4 rendered = texelFetch(s_rendered, p, 0);
   const vec3 hudless = texelFetch(s_hudless, p, 0).rgb;
 
+  // [nfs2se 0031] a pixel inside `rect` (the screen of a raytraced render target) is the RENDERED frame's picture whatever the interpolation made of it:
+  // the picture is another camera's ray traced image, which the scene's motion vectors and depth do not describe, so interpolating it only cross-fades two pictures
+  const bool inRect = all(greaterThanEqual(p, rectMin)) && all(lessThan(p, rectMax));
+
   // half an 8-bit step: any UI write to the pixel, however faint, takes it
-  if (any(greaterThan(abs(rendered.rgb - hudless), vec3(0.5 / 255.0)))) {
+  if (inRect || any(greaterThan(abs(rendered.rgb - hudless), vec3(0.5 / 255.0)))) {
     imageStore(o_generated, p, rendered);
   }
 }
