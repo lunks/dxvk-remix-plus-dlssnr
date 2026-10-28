@@ -288,8 +288,13 @@ namespace dxvk {
     [[nodiscard]] const MaterialData* accessExternalMaterial(remixapi_MaterialHandle handle) const;
     void destroyExternalMaterial(remixapi_MaterialHandle handle);
 
-    void registerExternalMesh(remixapi_MeshHandle handle, std::vector<RasterGeometry>&& submeshes);
+    // [nfs2se 0032] contentKey: a hash of the mesh's vertex and index data (not its materials); 0 = none (a skinned mesh). Meshes with the same key
+    // share the matching key of an API draw without a host identity, so a draw of another material of the same geometry takes the same instance.
+    void registerExternalMesh(remixapi_MeshHandle handle, std::vector<RasterGeometry>&& submeshes, XXH64_hash_t contentKey = 0);
     [[nodiscard]] const std::vector<RasterGeometry>& accessExternalMesh(remixapi_MeshHandle handle) const;
+    [[nodiscard]] XXH64_hash_t externalMeshContentKey(remixapi_MeshHandle handle) const;
+    // Takes the mesh's key out of the table before destroyExternalMesh: *key = the content key (0 = none), *lastOfKey = no other live mesh has it.
+    void releaseExternalMeshContentKey(remixapi_MeshHandle handle, XXH64_hash_t* key, bool* lastOfKey);
     void destroyExternalMesh(remixapi_MeshHandle handle);
 
   private:
@@ -310,6 +315,8 @@ namespace dxvk {
 
     std::unordered_map<remixapi_MaterialHandle, std::optional<MaterialData>> m_extMaterials {};
     std::unordered_map<remixapi_MeshHandle, std::unique_ptr<std::vector<RasterGeometry>>> m_extMeshes {};
+    std::unordered_map<remixapi_MeshHandle, XXH64_hash_t> m_extMeshKeys {};   // [nfs2se 0032]
+    std::unordered_map<XXH64_hash_t, uint32_t> m_extKeyRefs {};               // [nfs2se 0032] live meshes per content key
   };
 } // namespace dxvk
 

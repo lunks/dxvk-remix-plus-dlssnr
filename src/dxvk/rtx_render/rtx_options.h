@@ -503,6 +503,8 @@ namespace dxvk {
     RTX_OPTION("rtx", bool, resolvePreCombinedMatrices, true, "");
     // [nfs2se 0030] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoIdentityEXT is honoured.
     RTX_OPTION("rtx", uint32_t, capiInstanceIdentityExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoIdentityEXT (an API instance matches only last frame's instance of the same host identity).");
+    // [nfs2se 0032] A draw whose geometry and place are those of last frame's instance but whose material changed (an animated texture) keeps that instance and takes the new material in place.
+    RTX_OPTION("rtx", bool, keepInstanceAcrossMaterialChange, true, "A draw with the same geometry at the same transform as an instance not yet matched this frame takes that instance even when its material hash changed (a texture animation step): the instance is updated in place instead of a new one being made and the old one left to the garbage collection. Applies to D3D9 draws and to API draws without a host identity; for API meshes it also makes meshes with identical vertex and index data (and different materials) share the matching key. False = 1.5.1 behaviour.");
     // [nfs2se 0013] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoPrevTransformEXT is honoured.
     RTX_OPTION("rtx", uint32_t, capiInstancePrevTransformExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoPrevTransformEXT (the previous object-to-world of a new API instance, so its first frame has motion).");
 

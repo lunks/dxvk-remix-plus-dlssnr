@@ -23,8 +23,12 @@
 #include "rtx_options.h"
 #include "rtx_ray_portal_manager.h"
 #include "rtx_intersection_test.h"
+#include "rtx_fork_inst_counters.h"
+#include "rtx_fork_l2_match.h"
 #include "dxvk_device.h"
 #include "../util/util_struct_hash.h"
+#include "../util/log/log.h"
+#include "../util/util_string.h"
 
 
 namespace dxvk {
@@ -208,19 +212,37 @@ namespace dxvk {
     auto spatialMapIter = m_assetSpatialMaps.find(key.spatialMapHash);
     if (spatialMapIter != m_assetSpatialMaps.end()) {
       // Try exact transform + vertex position hash match first
-      ReplacementInstance* exactTransformMatch = nullptr;
-      spatialMapIter->second.forEachAtTransform(key.transform, [&](const ReplacementInstance* candidate) {
-        if (candidate->vertexPositionHash == key.vertexPositionHash && l2Filter(candidate)) {
-          exactTransformMatch = const_cast<ReplacementInstance*>(candidate);
-          return true;
+      // [nfs2se 0032] The exact-transform match is the same geometry at the same place: only the material can have changed (a texture
+      // animation step) and the instance is updated in place (updateInstance, hasMaterialChanged). pickExact (rtx_fork_l2_match.h) takes a
+      // same-material candidate as before, else the ONE unclaimed candidate of another material (never one a draw of this frame took,
+      // never one of several layers); a draw with a host identity (the cars) keeps the old rule.
+      nfs2se_inst::Counters& nc = nfs2se_inst::counters();
+      const auto pick = nfs2se_inst::pickExact<ReplacementInstance>(
+        [&](auto&& visitor) { spatialMapIter->second.forEachAtTransform(key.transform, visitor); },
+        currentFrameId, key.vertexPositionHash, key.materialHash, key.hostIdentity, RtxOptions::keepInstanceAcrossMaterialChange());
+      if (pick.pick == nullptr && (pick.unclaimedOtherMat > 1 || pick.claimedSkipped > 0)) {
+        // layered surfaces: two or more draws of one geometry and transform, none taken for another's material
+        nc.l2Declined.fetch_add(1, std::memory_order_relaxed);
+        if (pick.claimedSkipped > 0) {
+          nc.l2ClaimedSkipped.fetch_add(1, std::memory_order_relaxed);
         }
-        return false;
-      });
+      }
+      ReplacementInstance* exactTransformMatch = const_cast<ReplacementInstance*>(pick.pick);
       if (exactTransformMatch != nullptr) {
         // Compute diff before reassociation. Transform/vertex/spatialMap match
         // by construction here; only material can diverge (l2Filter requires
         // material match, so usually nothing differs at this point).
         computeDirtyFlags(exactTransformMatch, key);
+        // [nfs2se 0032] counted, and the first few named (the material hashes of the RI's last draw and of this one)
+        nc.l2Exact.fetch_add(1, std::memory_order_relaxed);
+        if (exactTransformMatch->materialHash != key.materialHash) {
+          nc.l2XMat.fetch_add(1, std::memory_order_relaxed);
+          if (nc.events.fetch_add(1, std::memory_order_relaxed) < nfs2se_inst::kMaxLoggedEvents) {
+            Logger::info(str::format("[nfs2se-inst] kept instance across a material change: replacement instance ", exactTransformMatch->id,
+              " material hash 0x", std::hex, exactTransformMatch->materialHash, " -> 0x", key.materialHash, std::dec, " (frame ", currentFrameId, ")"));
+          }
+        }
+        exactTransformMatch->materialHash = key.materialHash; // [nfs2se 0032] the cache follows the draw (reassociateMatch does the same for a nearest match)
         m_identityHashMap.erase(exactTransformMatch->identityHash);
         exactTransformMatch->identityHash = key.identityHash;
         m_identityHashMap[key.identityHash] = exactTransformMatch;
@@ -243,6 +265,7 @@ namespace dxvk {
     }
 
     // Level 3: no match — create a new ReplacementInstance.
+    nfs2se_inst::counters().riCreated.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
     auto newReplacementInstance = std::make_unique<ReplacementInstance>(
         key, m_nextReplacementInstanceId++, currentFrameId);
     ReplacementInstance* replacementInstance = newReplacementInstance.get();
@@ -379,6 +402,24 @@ namespace dxvk {
     const bool forceGC = (m_replacementInstances.size() >=
         RtxOptions::AntiCulling::Object::numObjectsToKeep());
 
+    // [nfs2se 0032] One line per 120 frames: the totals since the run began (a reader takes the difference of two lines).
+    if (currentFrame != 0 && currentFrame % 120 == 0) {
+      const nfs2se_inst::Counters& nc = nfs2se_inst::counters();
+      Logger::info(str::format("[nfs2se-inst] frame=", currentFrame,
+        " keepAcrossMaterial=", RtxOptions::keepInstanceAcrossMaterialChange() ? 1 : 0,
+        " inst_created=", nc.instCreated.load(std::memory_order_relaxed),
+        " inst_gone=", nc.instGone.load(std::memory_order_relaxed),
+        " mat_changed=", nc.matChanged.load(std::memory_order_relaxed),
+        " relink=", nc.relink.load(std::memory_order_relaxed),
+        " ri_created=", nc.riCreated.load(std::memory_order_relaxed),
+        " ri_gone=", nc.riGone.load(std::memory_order_relaxed),
+        " l2_exact=", nc.l2Exact.load(std::memory_order_relaxed),
+        " l2_xmat=", nc.l2XMat.load(std::memory_order_relaxed),
+        " l2_declined=", nc.l2Declined.load(std::memory_order_relaxed),
+        " l2_claimed_skipped=", nc.l2ClaimedSkipped.load(std::memory_order_relaxed),
+        " ri_live=", m_replacementInstances.size()));
+    }
+
     for (size_t i = 0; i < m_replacementInstances.size();) {
       ReplacementInstance* replacementInstance = m_replacementInstances[i].get();
 
@@ -449,6 +490,7 @@ namespace dxvk {
         }
 
         if (!keepAlive) {
+          nfs2se_inst::counters().riGone.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
           destroyReplacementInstance(replacementInstance);
           std::swap(m_replacementInstances[i], m_replacementInstances.back());
           m_replacementInstances.pop_back();

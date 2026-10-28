@@ -184,6 +184,30 @@ namespace {
     return sizeof(T) * count;
   }
 
+  // [nfs2se 0032] The content key of an API mesh: a hash of its surfaces' vertex and index data, never their materials. Meshes that differ only
+  // in material (the steps of an animated texture) have one key (rtx.keepInstanceAcrossMaterialChange). 0 = none.
+  XXH64_hash_t externalSurfaceContentKey(XXH64_hash_t seed, const remixapi_HardcodedVertex* vertices, size_t vertexCount, const uint32_t* indices, size_t indexCount) {
+    static const char kEmpty[1] = {};
+    XXH64_hash_t key = XXH3_64bits_withSeed(vertexCount ? static_cast<const void*>(vertices) : static_cast<const void*>(kEmpty), vertexCount * sizeof(remixapi_HardcodedVertex), seed ^ vertexCount);
+    return XXH3_64bits_withSeed(indexCount ? static_cast<const void*>(indices) : static_cast<const void*>(kEmpty), indexCount * sizeof(uint32_t), key ^ indexCount);
+  }
+
+  constexpr XXH64_hash_t kExternalContentKeySeed = 0x4E460032ull;
+
+  XXH64_hash_t externalOwnedContentKey(const std::vector<OwnedSurface>& surfaces) {
+    if (surfaces.empty()) {
+      return 0;
+    }
+    XXH64_hash_t key = kExternalContentKeySeed;
+    for (const OwnedSurface& s : surfaces) {
+      if (s.hasSkinning) {
+        return 0;
+      }
+      key = externalSurfaceContentKey(key, s.vertices.data(), s.vertices.size(), s.indices.data(), s.indices.size());
+    }
+    return key != 0 ? key : 1;
+  }
+
 
   bool isHResultAliasedWithRemixErrorCode(HRESULT hr) {
     switch (hr) {
@@ -1039,9 +1063,17 @@ namespace {
     }
 
     auto allocatedSurfaces = std::vector<dxvk::RasterGeometry> {};
+    XXH64_hash_t contentKey = info->surfaces_count > 0 ? kExternalContentKeySeed : 0; // [nfs2se 0032] 0 once a surface is skinned
 
     for (size_t i = 0; i < info->surfaces_count; i++) {
       const remixapi_MeshInfoSurfaceTriangles& src = info->surfaces_values[i];
+
+      if (contentKey != 0) {
+        contentKey = src.skinning_hasvalue ? 0 : externalSurfaceContentKey(contentKey, src.vertices_values, src.vertices_count, src.indices_values, src.indices_count);
+        if (!src.skinning_hasvalue && contentKey == 0) {
+          contentKey = 1;
+        }
+      }
 
       const size_t vertexDataSize = sizeInBytes(src.vertices_values, src.vertices_count);
       const size_t indexDataSize = sizeInBytes(src.indices_values, src.indices_count);
@@ -1142,9 +1174,9 @@ namespace {
     }
     std::lock_guard lock { s_mutex };
 
-    remixDevice->EmitCs([cHandle = handle, cSurfaces = std::move(allocatedSurfaces)](dxvk::DxvkContext* ctx) mutable {
+    remixDevice->EmitCs([cHandle = handle, cContentKey = contentKey, cSurfaces = std::move(allocatedSurfaces)](dxvk::DxvkContext* ctx) mutable {
       auto& assets = ctx->getCommonObjects()->getSceneManager().getAssetReplacer();
-      assets->registerExternalMesh(cHandle, std::move(cSurfaces));
+      assets->registerExternalMesh(cHandle, std::move(cSurfaces), cContentKey);
     });
 
     *out_handle = handle;
@@ -1265,7 +1297,7 @@ namespace {
     auto& assets = ctx->getCommonObjects()->getSceneManager().getAssetReplacer();
     for (auto& mesh : meshCreates) {
       auto allocatedSurfaces = buildExternalMeshSurfacesFromOwned(mesh.surfaces);
-      assets->registerExternalMesh(mesh.handle, std::move(allocatedSurfaces));
+      assets->registerExternalMesh(mesh.handle, std::move(allocatedSurfaces), externalOwnedContentKey(mesh.surfaces));
     }
   }
 

@@ -30,6 +30,7 @@
 #include "rtx_instance_manager.h"
 #include "rtx_camera_manager.h"
 #include "rtx_options.h"
+#include "rtx_fork_inst_counters.h"
 #include "rtx_materials.h"
 #include "rtx_ray_portal_manager.h"
 #include "rtx_terrain_baker.h"
@@ -603,6 +604,7 @@ namespace dxvk {
 
       if (pInstance->m_isMarkedForGC) {
         notifySceneChanged();
+        nfs2se_inst::counters().instGone.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
         removeInstance(pInstance);
 
         // If this instance is tracked in a persistent map (as key or value),
@@ -647,6 +649,7 @@ namespace dxvk {
       currentInstance->setBlas(blas);
       blas.linkInstance(currentInstance);
       currentInstance->m_blasDirty = true;
+      nfs2se_inst::counters().relink.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
       notifySceneChanged();
     }
 
@@ -886,6 +889,7 @@ namespace dxvk {
     const uint32_t instanceIdx = m_instances.size();
     RtInstance* newInst = new RtInstance(m_nextInstanceId++, instanceIdx);
     m_instances.push_back(newInst);
+    nfs2se_inst::counters().instCreated.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
 
     RtInstance* currentInstance = m_instances[instanceIdx];
 
@@ -1058,6 +1062,7 @@ namespace dxvk {
         currentInstance.m_materialHash = materialInstanceHash;
 
         if (currentInstance.surface.hasMaterialChanged) {
+          nfs2se_inst::counters().matChanged.fetch_add(1, std::memory_order_relaxed); // [nfs2se 0032]
           notifySceneChanged();
         }
 

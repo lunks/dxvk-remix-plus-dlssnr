@@ -188,7 +188,7 @@ void AssetReplacer::destroyExternalMaterial(remixapi_MaterialHandle handle) {
   m_extMaterials.erase(handle);
 }
 
-void AssetReplacer::registerExternalMesh(remixapi_MeshHandle handle, std::vector<RasterGeometry>&& submeshes) {
+void AssetReplacer::registerExternalMesh(remixapi_MeshHandle handle, std::vector<RasterGeometry>&& submeshes, XXH64_hash_t contentKey) {
   if (m_extMeshes.count(handle) > 0) {
     //Logger::info("Ignoring repeated mesh registration (handle=" + tostr(handle) + ") ");
     return;
@@ -201,6 +201,35 @@ void AssetReplacer::registerExternalMesh(remixapi_MeshHandle handle, std::vector
   }
 
   m_extMeshes.emplace(handle, std::make_unique< std::vector<RasterGeometry>>(std::move(submeshes)));
+
+  if (contentKey != 0) {
+    m_extMeshKeys.emplace(handle, contentKey);
+    ++m_extKeyRefs[contentKey];
+  }
+}
+
+XXH64_hash_t AssetReplacer::externalMeshContentKey(remixapi_MeshHandle handle) const {
+  auto found = m_extMeshKeys.find(handle);
+  return found == m_extMeshKeys.end() ? 0 : found->second;
+}
+
+void AssetReplacer::releaseExternalMeshContentKey(remixapi_MeshHandle handle, XXH64_hash_t* key, bool* lastOfKey) {
+  *key = 0;
+  *lastOfKey = true;
+  auto found = m_extMeshKeys.find(handle);
+  if (found == m_extMeshKeys.end()) {
+    return;
+  }
+  *key = found->second;
+  m_extMeshKeys.erase(found);
+  auto refs = m_extKeyRefs.find(*key);
+  if (refs != m_extKeyRefs.end()) {
+    if (--refs->second == 0) {
+      m_extKeyRefs.erase(refs);
+    } else {
+      *lastOfKey = false;
+    }
+  }
 }
 
 const std::vector<RasterGeometry>& AssetReplacer::accessExternalMesh(remixapi_MeshHandle handle) const {

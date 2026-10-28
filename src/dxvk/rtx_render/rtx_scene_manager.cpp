@@ -60,6 +60,11 @@ namespace {
     const uintptr_t meshId = reinterpret_cast<uintptr_t>(mesh);
     return XXH3_64bits(&meshId, sizeof(meshId));
   }
+
+  // [nfs2se 0032] The spatial map of the meshes that share one content key (identical vertex and index data, any material). Seeded so it never equals a handle's hash.
+  XXH64_hash_t spatialMapHashForExternalContentKey(XXH64_hash_t contentKey) {
+    return XXH3_64bits_withSeed(&contentKey, sizeof(contentKey), 0x4E46C0DE32ull);
+  }
 } // namespace
 
 namespace dxvk {
@@ -2451,9 +2456,19 @@ namespace dxvk {
     const XXH64_hash_t identityHash = state.hostIdentity
       ? XXH3_64bits_withSeed(&state.hostIdentity, sizeof(state.hostIdentity), state.computeExternalDrawIdentityHash())
       : state.computeExternalDrawIdentityHash();
-    const XXH64_hash_t spatialMapHash = spatialMapHashForExternalDrawMesh(state.mesh);
+    // [nfs2se 0032] A draw without a host identity finds last frame's instance in the map of its mesh's CONTENT (identical vertex and index
+    // data), not of its handle: the next animation step of a surface is another mesh (another material) of the same geometry. The exact
+    // identity hash above still holds the handle, so two such draws of one frame never share an instance.
+    const XXH64_hash_t contentKey = (state.hostIdentity == 0 && RtxOptions::keepInstanceAcrossMaterialChange())
+      ? m_pReplacer->externalMeshContentKey(state.mesh) : 0;
+    const XXH64_hash_t spatialMapHash = contentKey != 0
+      ? spatialMapHashForExternalContentKey(contentKey)
+      : spatialMapHashForExternalDrawMesh(state.mesh);
     const Matrix4& xform = state.drawCall.getTransformData().objectToWorld;
-    const XXH64_hash_t matHash = state.drawCall.getMaterialData().getHash();
+    // [nfs2se 0032] The tracker's material hash of a content-keyed draw names its mesh too (a mesh carries the material): the nearest-neighbour search,
+    // which still filters on this hash, then finds only the same mesh's instance as before, and pickExact sees one material per mesh.
+    const XXH64_hash_t drawMatHash = state.drawCall.getMaterialData().getHash();
+    const XXH64_hash_t matHash = contentKey != 0 ? XXH3_64bits_withSeed(&state.mesh, sizeof(state.mesh), drawMatHash) : drawMatHash;
     const Vector3 worldPos = xform[3].xyz();
 
     ReplacementInstance::LookupKey externalKey { identityHash, spatialMapHash, matHash, kEmptyHash, worldPos, xform };
@@ -2560,6 +2575,15 @@ namespace dxvk {
     if (handle) {
       m_drawCallTracker.removeReplacementInstancesWithSpatialMapHash(
           spatialMapHashForExternalDrawMesh(handle));
+      // [nfs2se 0032] The instances found through the content key go with the LAST mesh of that content: a stale animation step's mesh is
+      // destroyed while the next step's mesh (same key) is the one the instance now draws.
+      XXH64_hash_t contentKey = 0;
+      bool lastOfKey = true;
+      m_pReplacer->releaseExternalMeshContentKey(handle, &contentKey, &lastOfKey);
+      if (contentKey != 0 && lastOfKey) {
+        m_drawCallTracker.removeReplacementInstancesWithSpatialMapHash(
+            spatialMapHashForExternalContentKey(contentKey));
+      }
       m_pReplacer->destroyExternalMesh(handle);
     }
   }
