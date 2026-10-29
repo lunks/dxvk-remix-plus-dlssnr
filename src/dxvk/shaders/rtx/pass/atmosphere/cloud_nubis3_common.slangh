@@ -102,6 +102,7 @@ float valueErosion(float value, float erosion) {
 // use min(taps) with a safety factor, not this blend.
 // ---------------------------------------------------------------------------
 #include "cloud_horizon_profile.h"
+#include "cloud_opening_profile.h"
 
 float sampleCloudDensityNubis3(vec3 worldPosKm,
                                float heightFraction,
@@ -513,6 +514,20 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
     float sinElevation = fromAnchor.y / max(length(fromAnchor), 1e-6f);
     density = saturate(density) * cloudHorizonDensity(sinElevation, args.cloudHorizonFadeStartSin,
                                    args.cloudHorizonFadeEndSin, args.cloudZenithDensity);
+  }
+  // [nfs2se 0034] Sculpt only the selected sector of the world-anchored field.
+  // Removing density keeps the unmodified SDF empty-space bound conservative.
+  if (args.cloudOpeningDensity < 1.0f) {
+    vec3 fromAnchor = worldPosKm - args.cameraWorldPosYUpKm;
+    float horizontalLength = length(fromAnchor.xz);
+    if (horizontalLength > 1e-6f) {
+      float sinElevation = fromAnchor.y / max(length(fromAnchor), 1e-6f);
+      float cosAzimuth = dot(fromAnchor.xz / horizontalLength,
+                            vec2(args.cloudOpeningDirX, args.cloudOpeningDirZ));
+      density = saturate(density) * cloudOpeningDensity(sinElevation, cosAzimuth,
+          args.cloudOpeningCenterSin, args.cloudOpeningWidthSin,
+          args.cloudOpeningInnerCos, args.cloudOpeningOuterCos, args.cloudOpeningDensity);
+    }
   }
   return saturate(density) * densityScale;
 }

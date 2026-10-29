@@ -679,6 +679,18 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   args.cloudHorizonFadeEndSin = std::sin(cloudFadeEnd * 0.017453292519943295f);
   args.cloudZenithDensity = std::clamp(RtxOptions::cloudZenithDensity(), 0.0f, 1.0f);
   args.padCloudHorizon = 0.0f;
+  // [nfs2se 0034] Keep in cache keys: optical-depth grids use this same field.
+  const float openingWidth = std::clamp(RtxOptions::cloudOpeningHalfWidth(), 1.0f, 89.0f);
+  const float openingFeather = std::clamp(RtxOptions::cloudOpeningFeather(), 0.1f, openingWidth);
+  args.cloudOpeningDirX = std::sin(RtxOptions::cloudOpeningAzimuth() * kDegToRad);
+  args.cloudOpeningDirZ = std::cos(RtxOptions::cloudOpeningAzimuth() * kDegToRad);
+  args.cloudOpeningInnerCos = std::cos((openingWidth - openingFeather) * kDegToRad);
+  args.cloudOpeningOuterCos = std::cos(openingWidth * kDegToRad);
+  args.cloudOpeningCenterSin = std::sin(std::clamp(RtxOptions::cloudOpeningElevation(), 0.0f, 60.0f) * kDegToRad);
+  args.cloudOpeningWidthSin = std::sin(std::clamp(RtxOptions::cloudOpeningVerticalWidth(), 0.1f, 30.0f) * kDegToRad);
+  args.cloudOpeningDensity = std::clamp(RtxOptions::cloudOpeningDensity(), 0.0f, 1.0f);
+  args.padCloudOpening = 0.0f;
+
   // [nfs2se 0019]
   args.horizonSectorShiftRad     = RtxOptions::horizonSectorShift() * kDegToRad;
   // [nfs2se 0020]

@@ -3630,3 +3630,16 @@ and wind do not rotate the mask. This is artistic weather shaping, not cloud
 physics. The default has no image change. No UI panel; API/rtx.conf options.
 The CB grows by a complete 16-byte row, kept in cache keys to refresh density grids.
 SDF stepping remains conservative: removing density cannot create cloud in empty air.
+
+## nfs2se 0034: optional cloud-sector opening
+Six cloudOpening* options sculpt a feathered horizontal opening in one azimuth
+sector of the shared Nubis3 density field. Density defaults to1 (exact bypass).
+Outside the sector/band density is exactly unchanged, so the opposite sunset
+bank can be retained while exposing an anti-solar opening. Profile is defined
+in world-up coordinates relative to the same cloud anchor as0033, independent
+of camera orientation; use cloudWorldAnchor=false for a fixed track sky.
+This is artistic weather shaping, not physical cloud dynamics. Main, mirror,
+secondary and optical-depth taps share the same sampler. Only density is removed;
+SDF skipping stays conservative. Two complete CB rows, kept in density-cache keys.
+Shared C++/Slang scalar header cloud_opening_profile.h is host-tested by nfs2se.
+No UI panel; API/rtx.conf only. Default runtime regression required before shipping.

@@ -685,4 +685,13 @@ struct AtmosphereArgs {
   float cloudHorizonFadeEndSin;
   float cloudZenithDensity;       // 1 = exact legacy bypass; 0 = clear zenith
   float padCloudHorizon;
+  // [nfs2se 0034] Two complete CB rows, retained in density-grid cache keys.
+  float cloudOpeningDirX;
+  float cloudOpeningDirZ;
+  float cloudOpeningInnerCos;
+  float cloudOpeningOuterCos;
+  float cloudOpeningCenterSin;
+  float cloudOpeningWidthSin;
+  float cloudOpeningDensity;
+  float padCloudOpening;
 };
