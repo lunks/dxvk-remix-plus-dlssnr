@@ -678,4 +678,11 @@ struct AtmosphereArgs {
   // [nfs2se 0023] Recolour fraction of the sky inside the tint sector (0 = off):
   // its radiance moves toward its own luminance in horizonTintColor's hue. Rides 0018's last pad.
   float horizonTintRecolor;
+
+  // [nfs2se 0033] Shared cloud density elevation profile, one full CB row.
+  // Kept in cache keys: changes must refresh cloud optical-depth grids.
+  float cloudHorizonFadeStartSin;
+  float cloudHorizonFadeEndSin;
+  float cloudZenithDensity;       // 1 = exact legacy bypass; 0 = clear zenith
+  float padCloudHorizon;
 };

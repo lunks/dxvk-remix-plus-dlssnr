@@ -101,6 +101,8 @@ float valueErosion(float value, float erosion) {
 // an SDF). NOTE for Phase C: a blended distance is NOT metric — stepping must
 // use min(taps) with a safety factor, not this blend.
 // ---------------------------------------------------------------------------
+#include "cloud_horizon_profile.h"
+
 float sampleCloudDensityNubis3(vec3 worldPosKm,
                                float heightFraction,
                                float typeLocal,
@@ -502,6 +504,16 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
             * lerp(0.666f, 1.0f, softenBlend);
   }
 
+  // [nfs2se 0033] Sculpt the shared density field, not screen opacity. The
+  // same point has the same density in primary/secondary and shadow taps.
+  // With cloudWorldAnchor=false the anchor is zero: stable through the lap.
+  // Default bypass avoids both arithmetic changes and extra sample work.
+  if (args.cloudZenithDensity < 1.0f) {
+    vec3 fromAnchor = worldPosKm - args.cameraWorldPosYUpKm;
+    float sinElevation = fromAnchor.y / max(length(fromAnchor), 1e-6f);
+    density = saturate(density) * cloudHorizonDensity(sinElevation, args.cloudHorizonFadeStartSin,
+                                   args.cloudHorizonFadeEndSin, args.cloudZenithDensity);
+  }
   return saturate(density) * densityScale;
 }
 

@@ -1399,6 +1399,9 @@ namespace dxvk {
     // [nfs2se 0019]
     RTX_OPTION("rtx.atmosphere", float, horizonSectorShift, 0.0f, "[nfs2se 0019] Degrees added to the horizon line (horizonGroundElevation) and the band centre (horizonBandElevation) inside the tint sector (horizonTintAzimuth / horizonTintHalfWidth, weight exp(-(d/w)^2)), so a painted horizon can sit lower or higher at one heading. 0 = off (the same elevation all round). Independent of horizonTintStrength.");
     // [nfs2se 0018]
+    RTX_OPTION("rtx.atmosphere", float, cloudHorizonFadeStart, 8.0f, "[nfs2se 0033] Elevation degrees where cloud density starts fading toward the zenith. Range 0..89; shared primary, mirror and shadow density field.");
+    RTX_OPTION("rtx.atmosphere", float, cloudHorizonFadeEnd, 28.0f, "[nfs2se 0033] Elevation degrees where clouds reach cloudZenithDensity. Clamped above fade start and at 90 degrees.");
+    RTX_OPTION("rtx.atmosphere", float, cloudZenithDensity, 1.0f, "[nfs2se 0033] Density multiplier above the horizon fade: 1 (default) preserves the original field exactly, 0 clears overhead cloud. Horizon cloud density is unchanged; increase coverage separately if desired.");
     RTX_OPTION("rtx.atmosphere", bool, cloudEarthShadow, false, "[nfs2se 0018] Light each cloud sample with the sun as seen from that sample (its altitude's horizon dip and the cloud planet's curvature toward the sun) instead of from the camera; with the sun just below the camera's horizon, distant and high clouds toward it stay lit from below, reddened by the long air path. False (default) = the per-ray day gate.");
 
     // ----- Night-sky shading (fork) -----

@@ -671,6 +671,14 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   args.horizonTintHeightRad      = std::max(RtxOptions::horizonTintHeight(), 0.0f) * kDegToRad;
   // [nfs2se 0018]
   args.cloudEarthShadow          = RtxOptions::cloudEarthShadow() ? 1u : 0u;
+  // [nfs2se 0033] Density shaping uses world-up elevation, never the view
+  // basis. Keep these in the cache key: the cloud shadow grids consume them.
+  const float cloudFadeStart = std::clamp(RtxOptions::cloudHorizonFadeStart(), 0.0f, 89.0f);
+  const float cloudFadeEnd = std::clamp(RtxOptions::cloudHorizonFadeEnd(), cloudFadeStart + 0.1f, 90.0f);
+  args.cloudHorizonFadeStartSin = std::sin(cloudFadeStart * 0.017453292519943295f);
+  args.cloudHorizonFadeEndSin = std::sin(cloudFadeEnd * 0.017453292519943295f);
+  args.cloudZenithDensity = std::clamp(RtxOptions::cloudZenithDensity(), 0.0f, 1.0f);
+  args.padCloudHorizon = 0.0f;
   // [nfs2se 0019]
   args.horizonSectorShiftRad     = RtxOptions::horizonSectorShift() * kDegToRad;
   // [nfs2se 0020]

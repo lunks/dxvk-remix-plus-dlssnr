@@ -3618,3 +3618,15 @@ live-edited mid-storm.
 - **`RtxOptions.md`** - REGEN PENDING.
 
 ---
+
+## nfs2se 0033: optional horizon cloud concentration
+`rtx.atmosphere.cloudHorizonFadeStart` / `cloudHorizonFadeEnd` (degrees, defaults 8/28)
+and `cloudZenithDensity` (0..1, default 1 = exact bypass) smoothly attenuate density
+above the horizon. The shared Nubis3 density sampler applies the profile to the
+clamped density, so primary, mirror/secondary clouds and both optical-depth grids
+sample the same sculpted field. World-up elevation is relative to the cloud
+anchor (`cameraWorldPosYUpKm`, zero with cloudWorldAnchor=false); camera orientation
+and wind do not rotate the mask. This is artistic weather shaping, not cloud
+physics. The default has no image change. No UI panel; API/rtx.conf options.
+The CB grows by a complete 16-byte row, kept in cache keys to refresh density grids.
+SDF stepping remains conservative: removing density cannot create cloud in empty air.
