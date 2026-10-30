@@ -1102,6 +1102,7 @@ namespace dxvk {
 
     m_raytracingOutput.m_primarySurfaceFlags = createImageResource(ctx, "primary surface flags", m_downscaledExtent, VK_FORMAT_R8_UINT);
     m_raytracingOutput.m_primaryDisocclusionThresholdMix = createImageResource(ctx, "primary disocclusion threshold mix", m_downscaledExtent, VK_FORMAT_R16_SFLOAT);
+    m_raytracingOutput.m_primaryAnimatedTextureMask = createImageResource(ctx, "primary animated texture mask", m_downscaledExtent, VK_FORMAT_R8_UNORM); // [nfs2se 0039]
     m_raytracingOutput.m_primaryDisocclusionMaskForRR = AliasedResource(m_raytracingOutput.m_sharedSurfaceIndex, ctx, m_downscaledExtent, VK_FORMAT_R32_SFLOAT, "primary disocclusion mask for ray reconstruction", allowCompatibleFormatAliasing);
 
     if (m_raytracingOutput.m_primaryObjectPicking.isValid()) {

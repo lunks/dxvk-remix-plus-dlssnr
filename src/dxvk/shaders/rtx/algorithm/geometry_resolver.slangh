@@ -181,6 +181,7 @@ void geometryResolverOutputMiss<
     PrimaryScreenSpaceMotionVector[pixelCoordinate] = calcMotionVectorForRayMiss(pixelCoordinate);
     PrimarySurfaceFlags[pixelCoordinate] = 0;
     PrimaryDisocclusionThresholdMix[pixelCoordinate] = 0;
+    PrimaryAnimatedTextureMask[pixelCoordinate] = 0.0f; // [nfs2se 0039]
     PrimaryDepth[pixelCoordinate] = cb.clearColorDepth;
 
     // RR requires zeroed out input guide buffers for misses
@@ -317,6 +318,8 @@ void geometryResolverOutputSurface<
     // Note: May seem overkill to store a bool like this, but the denoiser expects an input unorm texture to lerp between the standard
     // and alternate disocclusion threshold so it must be expanded and stored to a texture like this at some point.
     imageStore(PrimaryDisocclusionThresholdMix, pixelCoordinate, disocclusionThresholdMix);
+    // [nfs2se 0039] The same predicate as the disocclusion value above, as DLSS-RR's animated-texture mask: this pixel's texture is changing frame to frame (hasMaterialChanged: patch 0032 keeps the instance across the step).
+    imageStore(PrimaryAnimatedTextureMask, pixelCoordinate, surface.hasMaterialChanged ? 1.0f : 0.0f);
   }
   else
   {

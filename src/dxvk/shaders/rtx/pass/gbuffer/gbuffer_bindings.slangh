@@ -172,6 +172,10 @@ RWTexture2D<uint> PrimarySurfaceFlags;
 layout(r16f, binding = GBUFFER_BINDING_PRIMARY_DISOCCLUSION_THRESHOLD_MIX_OUTPUT)
 RWTexture2D<float> PrimaryDisocclusionThresholdMix;
 
+// [nfs2se 0039] 1 where the primary surface's material changed this frame (an animated texture's next step), else 0: DLSS-RR's pInAnimatedTextureMask.
+layout(r8, binding = GBUFFER_BINDING_PRIMARY_ANIMATED_TEXTURE_MASK_OUTPUT)
+RWTexture2D<float> PrimaryAnimatedTextureMask;
+
 layout(r32f, binding = GBUFFER_BINDING_PRIMARY_DEPTH_OUTPUT)
 RWTexture2D<float> PrimaryDepth;
 

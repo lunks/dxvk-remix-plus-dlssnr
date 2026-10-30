@@ -411,6 +411,18 @@ namespace dxvk {
       resetScreenResolution(upscaledExtent);
     }
 
+    // [nfs2se 0038] A host-driven history reset: the counter changed since the last frame -> the main camera's view history is invalid for this frame (everything below that asks
+    // isViewHistoryInvalidated sees it), and the reset flags go out. No camera-cut bookkeeping and no scene flush: only the temporal history goes.
+    {
+      static uint32_t sSeenHostHistoryResetSerial = 0;
+      const uint32_t hostSerial = RtxOptions::hostHistoryResetSerial();
+      if (hostSerial != sSeenHostHistoryResetSerial) {
+        sSeenHostHistoryResetSerial = hostSerial;
+        getSceneManager().getCamera().invalidateViewHistory(m_device->getCurrentFrameId());
+        Logger::info(str::format("[nfs2se host-reset] temporal history reset on frame ", m_device->getCurrentFrameId(), " (rtx.hostHistoryResetSerial=", hostSerial, "): no scene flush"));
+      }
+    }
+
     const RtCamera& mainCamera = getSceneManager().getCamera();
     m_resetHistory = m_resetHistory || mainCamera.isViewHistoryInvalidated(m_device->getCurrentFrameId());
 

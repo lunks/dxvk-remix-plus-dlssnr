@@ -684,6 +684,10 @@ namespace dxvk {
     RTX_OPTION("rtx", uint32_t, numFramesToKeepInstances, 1, "");
     // [nfs2se 0005] Marker for hosts: this build carries the C API fixes of patch 0001 (see patches/0005 of the NFS2 SE tree). Nothing reads the value; a host probes that the option exists.
     RTX_OPTION("rtx", uint32_t, capiFixLevel, 1, "A marker option, read by nothing: its existence tells a host that this Remix build carries the C API external-draw replacement fixes (the instance of a replaced API mesh is kept alive and re-initialised).");
+    // [nfs2se 0038] A host-driven history reset. A host that knows a REAL camera cut happened (a new race, a replay camera jump) raises this counter by one (remixapi_SetConfigVariable); the next frame
+    // Remix sees a value it has not seen, invalidates the main camera's view history for that frame and so resets the temporal history (DLSS-RR / DLSS-NR / frame generation reset flags, the denoisers,
+    // global volumetrics, TAA), exactly as an automatic camera cut does, but WITHOUT the scene flush an automatic cut triggers (SceneManager::m_enqueueDelayedClear): the scene a C API host built stays.
+    RTX_OPTION("rtx", uint32_t, hostHistoryResetSerial, 0, "A counter a host raises to ask for a temporal history reset on the next frame (a real camera cut); it never flushes the scene. The value itself means nothing, only that it differs from the last one seen. Its existence also tells a host the build honours it (patch 0038).");
     // [nfs2se 0007] Feature probe, read by nothing: a host that sets it successfully knows remixapi_InstanceInfoLifetimeEXT is honoured.
     RTX_OPTION("rtx", uint32_t, capiInstanceLifetimeExt, 1, "A marker option, read by nothing: its existence tells a host that this Remix build honours remixapi_InstanceInfoLifetimeEXT (a per-instance keep that overrides numFramesToKeepInstances).");
     RTX_OPTION("rtx", uint32_t, numFramesToKeepBLAS, 1, "");

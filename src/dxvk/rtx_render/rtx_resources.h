@@ -273,6 +273,7 @@ namespace dxvk
       // so the high-frequency pattern is no longer routed around the denoiser.
       Resource m_primarySurfaceFlags;
       Resource m_primaryDisocclusionThresholdMix;
+      Resource m_primaryAnimatedTextureMask; // [nfs2se 0039]
       AliasedResource m_primaryDisocclusionMaskForRR;
       Resource m_primaryObjectPicking;
 

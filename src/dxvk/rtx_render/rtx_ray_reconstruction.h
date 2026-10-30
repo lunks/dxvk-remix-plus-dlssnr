@@ -88,6 +88,8 @@ namespace dxvk {
     RTX_OPTION_ARGS("rtx.rayreconstruction", RayReconstructionModel, model, RayReconstructionModel::Transformer, "Ray reconstruction model to use. 0: CNN, 1: Transformer (higher quality).",
                     args.environment = "RTX_RAY_RECONSTRUCTION_MODEL",
                     args.flags = RtxOptionFlags::UserSetting);
+    // [nfs2se 0039] DLSS-RR gets pInAnimatedTextureMask: 1 on the pixels whose material changed this frame (an animated texture's next step). Default True; False passes nullptr (the A/B inside one DLL).
+    RTX_OPTION("rtx.rayreconstruction", bool, enableAnimatedTextureMask, true, "Pass the animated-texture mask (pixels whose material changed this frame) to DLSS-RR so it down-weights their history.");
     RTX_OPTION("rtx.rayreconstruction", bool, enableDisocclusionMaskBlur, false, "Enables blurring of disocclusion mask to suppress instabilities due to abrupt mask value changes.");
     RTX_OPTION("rtx.rayreconstruction", uint, disocclusionMaskBlurRadius, 32, "Pixel radius to use for blurring disocclusion mask.");
     RTX_OPTION("rtx.rayreconstruction", float, disocclusionMaskBlurNormalizedGaussianWeightSigma, 0.5f,

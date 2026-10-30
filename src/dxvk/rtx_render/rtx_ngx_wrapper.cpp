@@ -788,6 +788,7 @@ namespace dxvk
     NVSDK_NGX_Resource_VK biasCurrentColorMaskResource = TextureToResourceVK(buffers.pBiasCurrentColorMask, false);
     NVSDK_NGX_Resource_VK hitDistanceResource = TextureToResourceVK(buffers.pHitDistance, false);
     NVSDK_NGX_Resource_VK inTransparencyLayerResource = TextureToResourceVK(buffers.pInTransparencyLayer, false);
+    NVSDK_NGX_Resource_VK animatedTextureMaskResource = TextureToResourceVK(buffers.pAnimatedTextureMask, false); // [nfs2se 0039]
 
     NVSDK_NGX_VK_DLSS_Eval_Params evalParams = {};
     evalParams.Feature.pInColor = &unresolvedColorResource;
@@ -841,6 +842,14 @@ namespace dxvk
     evalParams_DLDN.pInViewToClipMatrix = (float*) m_viewToProjectionMatrix.data;
     evalParams_DLDN.pInSpecularHitDistance = buffers.pHitDistance ? &hitDistanceResource : nullptr;
     evalParams_DLDN.pInDisocclusionMask = &disocclusionMask;
+    evalParams_DLDN.pInAnimatedTextureMask = buffers.pAnimatedTextureMask ? &animatedTextureMaskResource : nullptr; // [nfs2se 0039]
+    if (buffers.pAnimatedTextureMask) {
+      static bool sAnimatedTextureMaskSaid = false;
+      if (!sAnimatedTextureMaskSaid) {
+        sAnimatedTextureMaskSaid = true;
+        Logger::info("[nfs2se animmask] DLSS-RR is given pInAnimatedTextureMask (rtx.rayreconstruction.enableAnimatedTextureMask)");
+      }
+    }
 
     result = NGX_CALL(NGX_VULKAN_EVALUATE_DLSSD_EXT(vkCommandbuffer, m_featureRayReconstruction, m_parameters, &evalParams_DLDN));
 
