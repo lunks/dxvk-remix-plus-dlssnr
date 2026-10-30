@@ -38,6 +38,7 @@
 #include "rtx_tone_mapping.h"
 #include "rtx_neural_radiance_cache.h"
 #include "rtx_ray_reconstruction.h"
+#include "rtx_fork_game_state.h"
 
 namespace dxvk {
   RtxInitializer::RtxInitializer(DxvkDevice* device)
@@ -140,6 +141,8 @@ namespace dxvk {
     ctx->flushCommandList();
 
     m_assetsLoaded = true;
+    // [nfs2se 0036] the host reads this with remixapi_GetGameValue (the store has its own mutex; this may run on the asset thread)
+    fork_game_state::GameStateStore::get().set("rtx.assetsLoaded", "1");
   }
 
   void RtxInitializer::startPrewarmShaders() {
