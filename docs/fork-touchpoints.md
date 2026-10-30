@@ -3653,3 +3653,9 @@ sector support. Opposite-sector density is exactly unchanged; default0 bypasses.
 The march bound subtracts the maximum outward excursion, not the local sample.
 Host tests cover continuity, boundedness, non-periodicity, rear/default bypass,
 and safe stepping. No sky-colour or sun-lighting changes.
+
+0035r2: owner also requests sunset-side variety. cloudVarietyRearKm independently
+enables the opposite sector (default0). Equal front/rear strengths use the same
+weather treatment; sunset colour/light remains untouched. The bound reserves
+max(front,rear), valid because the supports are disjoint. Host regression proves
+rear0 matches0035r1 and enabling the rear does not alter the front field.

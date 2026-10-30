@@ -39,6 +39,18 @@ float cloudVarietyOffset(float sinElevation, float cosAzimuth, float centerSin,
                                          widthSin,innerCos,outerCos,0.0f);
   return strengthKm * weight * weather;
 }
+float cloudVarietySectorsOffset(float sinElevation, float cosAzimuth, float centerSin,
+                                float widthSin, float innerCos, float outerCos,
+                                float frontKm, float rearKm, float weather) {
+  // Sector half-width is clamped below90deg on the CPU, so supports never overlap.
+  float strengthKm = cosAzimuth >= 0.0f ? frontKm : rearKm;
+  float absoluteCos = cosAzimuth >= 0.0f ? cosAzimuth : -cosAzimuth;
+  return cloudVarietyOffset(sinElevation,absoluteCos,centerSin,widthSin,
+                            innerCos,outerCos,strengthKm,weather);
+}
+float cloudVarietyGrowthBudget(float frontKm, float rearKm) {
+  return frontKm > rearKm ? frontKm : rearKm;
+}
 float cloudVarietyStepBound(float sdfMinKm, float baseOffsetKm,
                             float maxOutwardKm, float strengthKm) {
   // A nearby sample may grow by the full positive weather excursion. Using

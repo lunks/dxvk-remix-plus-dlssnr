@@ -171,19 +171,20 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
   float offsetKm = baseOffsetKm;
   // [nfs2se 0035] Vary cluster footprints before profile/erosion, not with a
   // screen overlay. Main, mirror and optical-depth taps use the same field.
-  if (args.cloudVarietyKm > 0.0f) {
+  if (args.cloudVarietyKm > 0.0f || args.cloudVarietyRearKm > 0.0f) {
     vec3 fromAnchor = worldPosKm - args.cameraWorldPosYUpKm;
     float horizontalLength = length(fromAnchor.xz);
     if (horizontalLength > 1e-6f) {
       float sinElevation = fromAnchor.y / max(length(fromAnchor), 1e-6f);
       float cosAzimuth = dot(fromAnchor.xz / horizontalLength,
                             vec2(args.cloudOpeningDirX, args.cloudOpeningDirZ));
-      if (cosAzimuth > args.cloudOpeningOuterCos &&
+      float sectorStrength = cosAzimuth >= 0.0f ? args.cloudVarietyKm : args.cloudVarietyRearKm;
+      if (sectorStrength > 0.0f && abs(cosAzimuth) > args.cloudOpeningOuterCos &&
           abs(sinElevation - args.cloudOpeningCenterSin) < args.cloudOpeningWidthSin) {
         float weather = cloudVarietyNoise(perturbed.x, perturbed.z, args.cloudVarietyScale);
-        offsetKm += cloudVarietyOffset(sinElevation, cosAzimuth,
+        offsetKm += cloudVarietySectorsOffset(sinElevation, cosAzimuth,
             args.cloudOpeningCenterSin, args.cloudOpeningWidthSin,
-            args.cloudOpeningInnerCos, args.cloudOpeningOuterCos, args.cloudVarietyKm, weather);
+            args.cloudOpeningInnerCos, args.cloudOpeningOuterCos, args.cloudVarietyKm, args.cloudVarietyRearKm, weather);
       }
     }
   }
@@ -206,7 +207,8 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
   // on every return path — the early-out below is exactly where the march
   // wants to skip.
   float maxOutwardKm = 0.5f * (wobbleKm + args.nubis3ShapeVarietyKm);
-  sdfStepKmOut = cloudVarietyStepBound(sdfMinKm, baseOffsetKm, maxOutwardKm, args.cloudVarietyKm);
+  sdfStepKmOut = cloudVarietyStepBound(sdfMinKm, baseOffsetKm, maxOutwardKm,
+      cloudVarietyGrowthBudget(args.cloudVarietyKm, args.cloudVarietyRearKm));
 
   if (sdfLive >= maxOutwardKm) {
     return 0.0f;

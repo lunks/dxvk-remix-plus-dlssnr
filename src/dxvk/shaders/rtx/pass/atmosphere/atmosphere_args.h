@@ -697,6 +697,6 @@ struct AtmosphereArgs {
   // [nfs2se 0035] Full aligned row; included in density-grid cache keys.
   float cloudVarietyKm;
   float cloudVarietyScale;
-  float padCloudVariety0;
+  float cloudVarietyRearKm;
   float padCloudVariety1;
 };
