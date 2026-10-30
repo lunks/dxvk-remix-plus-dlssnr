@@ -103,6 +103,7 @@ float valueErosion(float value, float erosion) {
 // ---------------------------------------------------------------------------
 #include "cloud_horizon_profile.h"
 #include "cloud_opening_profile.h"
+#include "cloud_variety_profile.h"
 
 float sampleCloudDensityNubis3(vec3 worldPosKm,
                                float heightFraction,
@@ -166,7 +167,26 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
   // 4. Coverage as a live level-set offset: coverage above the baked nominal
   //    pushes the iso-surface outward (bodies grow/merge), below shrinks them
   //    toward their cores.
-  float offsetKm = (coverageLocal - args.nvdfNominalCoverage) * args.nvdfCoverageOffsetKm;
+  float baseOffsetKm = (coverageLocal - args.nvdfNominalCoverage) * args.nvdfCoverageOffsetKm;
+  float offsetKm = baseOffsetKm;
+  // [nfs2se 0035] Vary cluster footprints before profile/erosion, not with a
+  // screen overlay. Main, mirror and optical-depth taps use the same field.
+  if (args.cloudVarietyKm > 0.0f) {
+    vec3 fromAnchor = worldPosKm - args.cameraWorldPosYUpKm;
+    float horizontalLength = length(fromAnchor.xz);
+    if (horizontalLength > 1e-6f) {
+      float sinElevation = fromAnchor.y / max(length(fromAnchor), 1e-6f);
+      float cosAzimuth = dot(fromAnchor.xz / horizontalLength,
+                            vec2(args.cloudOpeningDirX, args.cloudOpeningDirZ));
+      if (cosAzimuth > args.cloudOpeningOuterCos &&
+          abs(sinElevation - args.cloudOpeningCenterSin) < args.cloudOpeningWidthSin) {
+        float weather = cloudVarietyNoise(perturbed.x, perturbed.z, args.cloudVarietyScale);
+        offsetKm += cloudVarietyOffset(sinElevation, cosAzimuth,
+            args.cloudOpeningCenterSin, args.cloudOpeningWidthSin,
+            args.cloudOpeningInnerCos, args.cloudOpeningOuterCos, args.cloudVarietyKm, weather);
+      }
+    }
+  }
   float sdfLive  = sdfKm - offsetKm;
   sdfKmOut = sdfLive;
 
@@ -186,7 +206,7 @@ float sampleCloudDensityNubis3(vec3 worldPosKm,
   // on every return path — the early-out below is exactly where the march
   // wants to skip.
   float maxOutwardKm = 0.5f * (wobbleKm + args.nubis3ShapeVarietyKm);
-  sdfStepKmOut = sdfMinKm - offsetKm - maxOutwardKm;
+  sdfStepKmOut = cloudVarietyStepBound(sdfMinKm, baseOffsetKm, maxOutwardKm, args.cloudVarietyKm);
 
   if (sdfLive >= maxOutwardKm) {
     return 0.0f;

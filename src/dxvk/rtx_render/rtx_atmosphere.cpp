@@ -690,6 +690,11 @@ AtmosphereArgs RtxAtmosphere::getAtmosphereArgs() const {
   args.cloudOpeningWidthSin = std::sin(std::clamp(RtxOptions::cloudOpeningVerticalWidth(), 0.1f, 30.0f) * kDegToRad);
   args.cloudOpeningDensity = std::clamp(RtxOptions::cloudOpeningDensity(), 0.0f, 1.0f);
   args.padCloudOpening = 0.0f;
+  args.cloudVarietyKm = std::clamp(RtxOptions::cloudVarietyKm(), 0.0f, 2.0f);
+  args.cloudVarietyScale = std::clamp(RtxOptions::cloudVarietyScale(), 0.005f, 0.2f);
+  args.padCloudVariety0 = 0.0f;
+  args.padCloudVariety1 = 0.0f;
+
 
   // [nfs2se 0019]
   args.horizonSectorShiftRad     = RtxOptions::horizonSectorShift() * kDegToRad;

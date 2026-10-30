@@ -1409,6 +1409,9 @@ namespace dxvk {
     RTX_OPTION("rtx.atmosphere", float, cloudOpeningFeather, 25.0f, "[nfs2se 0034] Horizontal edge feather [0.1..89] degrees inside the opening half-width.");
     RTX_OPTION("rtx.atmosphere", float, cloudOpeningElevation, 7.0f, "[nfs2se 0034] Opening center elevation [0..60] degrees above the cloud anchor.");
     RTX_OPTION("rtx.atmosphere", float, cloudOpeningVerticalWidth, 3.0f, "[nfs2se 0034] Vertical profile half-width [0.1..30] degrees, converted to sine elevation. Smooth density taper from center to unchanged edges.");
+    // [nfs2se 0035] Reuse the opening sector's feathered angular support.
+    RTX_OPTION("rtx.atmosphere", float, cloudVarietyKm, 0.0f, "[nfs2se 0035] Non-tiled signed cloud-body size variation [0..2]km, inside the cloudOpening sector only. Zero is exact bypass; cloudOpeningDensity may remain1. Changes shared density/shadows, not sky colour.");
+    RTX_OPTION("rtx.atmosphere", float, cloudVarietyScale, 0.055f, "[nfs2se 0035] Spatial weather frequency [0.005..0.2] inverse km. Two smooth rotated noise octaves; smaller means broader regions. Shared cloud-space field for main/mirror/shadows.");
     RTX_OPTION("rtx.atmosphere", bool, cloudEarthShadow, false, "[nfs2se 0018] Light each cloud sample with the sun as seen from that sample (its altitude's horizon dip and the cloud planet's curvature toward the sun) instead of from the camera; with the sun just below the camera's horizon, distant and high clouds toward it stay lit from below, reddened by the long air path. False (default) = the per-ray day gate.");
 
     // ----- Night-sky shading (fork) -----

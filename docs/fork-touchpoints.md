@@ -3643,3 +3643,13 @@ secondary and optical-depth taps share the same sampler. Only density is removed
 SDF skipping stays conservative. Two complete CB rows, kept in density-cache keys.
 Shared C++/Slang scalar header cloud_opening_profile.h is host-tested by nfs2se.
 No UI panel; API/rtx.conf only. Default runtime regression required before shipping.
+
+## NFS2SE0035: sector cloud variety
+
+Default-off cloudVarietyKm/cloudVarietyScale in rtx_options.h, marshalled in a
+full AtmosphereArgs row. Shared cloud_variety_profile.h adds deterministic
+non-tiled size variation to sampleCloudDensityNubis3 within the existing opening
+sector support. Opposite-sector density is exactly unchanged; default0 bypasses.
+The march bound subtracts the maximum outward excursion, not the local sample.
+Host tests cover continuity, boundedness, non-periodicity, rear/default bypass,
+and safe stepping. No sky-colour or sun-lighting changes.
