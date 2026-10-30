@@ -806,6 +806,13 @@ namespace dxvk {
         const bool performSRGBConversion = !captureScreenImage && g_allowSrgbConversionForOutput;
         dispatchSRGBDither(rtOutput, performSRGBConversion);
 
+        // Neural Uplift anchors here and nowhere else. The model is LDR-clamped and trained on
+        // tonemapped, display-encoded frames, and in this runtime tone mapping leaves the image in
+        // linear LDR - the sRGB encode is this separate late pass. Anchoring between the two hands
+        // the network a gamma domain it was not trained on, which reads as lifted blacks and washed
+        // out shadows. Before the screen overlay, so the UI is not fed through the model.
+        dispatchNeuralUplift(rtOutput, performSRGBConversion);
+
         // Composite screen overlay (from external C API) after tone mapping, before screenshot capture.
         dispatchScreenOverlay(rtOutput);
 
@@ -1817,6 +1824,22 @@ namespace dxvk {
   void RtxContext::dispatchRayReconstruction(const Resources::RaytracingOutput& rtOutput) {
     DxvkRayReconstruction& rayReconstruction = m_common->metaRayReconstruction();
     rayReconstruction.dispatch(this, m_execBarriers, rtOutput, m_resetHistory, GlobalTime::get().deltaTimeMs());
+  }
+
+  void RtxContext::dispatchNeuralUplift(const Resources::RaytracingOutput& rtOutput,
+                                        bool displayEncoded) {
+    ScopedCpuProfileZone();
+
+    if (!m_common->metaNeuralUplift().isActive()) {
+      return;
+    }
+
+    spillRenderPass(false);
+    unbindComputePipeline();
+
+    // [nfs2se nr1] DLSS-RR writes its own depth and motion-vector guides; hand NR those when RR upscaled the frame.
+    const bool rrGuides = m_currentUpscaler == InternalUpscaler::DLSS_RR;
+    m_common->metaNeuralUplift().dispatch(this, m_execBarriers, rtOutput, displayEncoded, m_resetHistory, rrGuides);
   }
 
   void RtxContext::dispatchNIS(const Resources::RaytracingOutput& rtOutput) {

@@ -423,6 +423,7 @@ namespace dxvk {
       { RtxFramePassStage::AutoExposure_Histogram, "AutoExposure_Histogram" },
       { RtxFramePassStage::AutoExposure_Exposure, "AutoExposure_Exposure" },
       { RtxFramePassStage::ToneMapping, "ToneMapping" },
+      { RtxFramePassStage::NeuralUplift, "NeuralUplift" },
       { RtxFramePassStage::FrameEnd, "FrameEnd" },
   } };
 
@@ -3592,6 +3593,17 @@ namespace dxvk {
       }
 
       fork_hooks::showSharedSharpnessSlider();
+
+      // Sits with the upscaler controls rather than under Post-Processing: it is the same NGX
+      // family, and it is not tied to any one upscaler - it runs on whatever produced the frame,
+      // including none - so it belongs after the per-upscaler branches rather than inside one.
+      if (RemixGui::CollapsingHeader("Neural Uplift (DLSS-NR)", collapsingHeaderClosedFlags)) {
+        ImGui::Indent();
+        ImGui::PushID("Neural Uplift");
+        ctx->getCommonObjects()->metaNeuralUplift().showImguiSettings();
+        ImGui::PopID();
+        ImGui::Unindent();
+      }
 
       RemixGui::Separator();
 

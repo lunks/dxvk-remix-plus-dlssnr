@@ -1111,6 +1111,7 @@ enum class RtxFramePassStage {
   AutoExposure_Histogram,
   AutoExposure_Exposure,
   ToneMapping,
+  NeuralUplift,
   FrameEnd
 };
 
