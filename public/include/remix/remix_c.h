@@ -148,6 +148,8 @@ extern "C" {
     REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_PREV_TRANSFORM_EXT     = 0x4E460002,
     // [nfs2se 0030] Far from the upstream range (0007 0x4E460001, 0013 0x4E460002).
     REMIXAPI_STRUCT_TYPE_INSTANCE_INFO_IDENTITY_EXT           = 0x4E460003,
+    // [nfs2se 0041] Far from the upstream range (0007 0x4E460001, 0013 0x4E460002, 0030 0x4E460003).
+    REMIXAPI_STRUCT_TYPE_MATERIAL_INFO_REPLACE_EXT            = 0x4E460004,
   } remixapi_StructType;
 
   typedef enum remixapi_ErrorCode {
@@ -304,6 +306,30 @@ extern "C" {
     uint8_t             rayPortalIndex;
     float               rotationSpeed;
   } remixapi_MaterialInfoPortalEXT;
+
+  // [nfs2se 0041] The mod material replacement of an API material. A D3D9 draw takes the mod's `mat_<hash>` named by its legacy
+  // texture hash and the categories of the rtx.*Textures lists by the same hash; an API draw now does the same by the image hash of
+  // its material's albedo texture (an API-uploaded texture's image hash is the `hash` of remixapi_TextureInfo), and this struct, in
+  // the pNext chain of remixapi_MaterialInfo, states or restricts that:
+  //   legacyHash  the hash to look up and to take the category lists by; 0 = the albedo texture's image hash. A material with no
+  //               albedo texture (a synthetic hash) states it here; Remix logs one `[nfs2se matrepl] WARNING` for a stated hash no mod states.
+  //   flags       REMIXAPI_MATERIAL_REPLACE_KEEP_ROUGHNESS / _KEEP_METALLIC: this material's roughness / metallic constant and map win over
+  //               the replacement's; _NO_REPLACE: no mod material for this one (the category lists still apply by the hash).
+  // Without the struct an API material is replaced by its albedo hash. A host probes support with the option rtx.capiMaterialReplacement
+  // (an older runtime skips the struct and refuses the option). The replacement takes the API material's albedo texture and sampler where
+  // the mod states none, as for a D3D9 draw.
+  typedef enum remixapi_MaterialReplaceFlags {
+    REMIXAPI_MATERIAL_REPLACE_KEEP_ROUGHNESS = 1 << 0,
+    REMIXAPI_MATERIAL_REPLACE_KEEP_METALLIC  = 1 << 1,
+    REMIXAPI_MATERIAL_REPLACE_NO_REPLACE     = 1 << 2,
+  } remixapi_MaterialReplaceFlags;
+
+  typedef struct remixapi_MaterialInfoReplaceEXT {
+    remixapi_StructType sType;
+    void*               pNext;
+    uint64_t            legacyHash;
+    uint32_t            flags;
+  } remixapi_MaterialInfoReplaceEXT;
 
   typedef struct remixapi_MaterialInfo {
     remixapi_StructType sType;

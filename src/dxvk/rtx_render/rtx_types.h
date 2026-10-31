@@ -673,9 +673,8 @@ using CategoryFlags = Flags<InstanceCategories>;
 struct MaterialData;
 struct DrawCallState;
 namespace fork_hooks {
-  void externalDrawTextureCategories(const MaterialData* material,
-                                     DrawCallState& drawCall,
-                                     XXH64_hash_t& textureHash);
+  void externalDrawTextureCategories(XXH64_hash_t legacyHash,
+                                     DrawCallState& drawCall);
   // Fills in the weather precipitation emitter's draw call (transform + the
   // blend state the generated particle geometry inherits). Needs access to
   // DrawCallState's private transformData / materialData, same as the API's
@@ -865,7 +864,7 @@ private:
   // Fork touchpoint: the external-draw texture-category hook needs access to
   // private setCategory. See docs/fork-touchpoints.md.
   friend void fork_hooks::externalDrawTextureCategories(
-    const MaterialData* material, DrawCallState& drawCall, XXH64_hash_t& textureHash);
+    XXH64_hash_t legacyHash, DrawCallState& drawCall);
 
   // Fork touchpoint: the precipitation emitter builds its DrawCallState from
   // scratch and needs transformData / materialData. See

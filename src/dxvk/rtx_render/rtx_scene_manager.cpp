@@ -2527,11 +2527,12 @@ namespace dxvk {
 
       const MaterialData* material = m_pReplacer->accessExternalMaterial(submeshes[i].externalMaterial);
       if (material != nullptr) {
-        fork_hooks::externalDrawMaterialReplacement(*m_pReplacer, material);
+        // [nfs2se 0041] the mod material and the list categories of the draw's LEGACY texture hash, as a D3D9 draw gets them
+        material = fork_hooks::externalDrawResolveMaterial(*m_pReplacer, material, submeshes[i].externalMaterial, textureHash);
 
         state.drawCall.modifyMaterialData().setHashOverride(material->getHash());
 
-        fork_hooks::externalDrawTextureCategories(material, state.drawCall, textureHash);
+        fork_hooks::externalDrawTextureCategories(textureHash, state.drawCall);
       }
 
       const RtxParticleSystemDesc* pParticles = nullptr;

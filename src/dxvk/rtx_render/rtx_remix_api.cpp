@@ -1019,10 +1019,20 @@ namespace {
 
     // async load
     std::lock_guard lock { s_mutex };
+    // [nfs2se 0041] the host's replacement request (remixapi_MaterialInfoReplaceEXT), kept for the draws of this material
+    uint64_t replaceHash = 0;
+    uint32_t replaceFlags = 0;
+    if (auto extReplace = pnext::find<remixapi_MaterialInfoReplaceEXT>(info)) {
+      replaceHash = extReplace->legacyHash;
+      replaceFlags = extReplace->flags;
+    }
     remixDevice->EmitCs([cHandle = handle,
+                         cReplaceHash = replaceHash,
+                         cReplaceFlags = replaceFlags,
                          cMaterialData = convert::toRtMaterialWithoutTexturePreload(*info),
                          cPreloadSrc = convert::makePreloadSource(*info)](dxvk::DxvkContext* ctx) {
       auto& assets = ctx->getCommonObjects()->getSceneManager().getAssetReplacer();
+      dxvk::fork_hooks::externalMaterialReplaceRegister(cHandle, cReplaceHash, cReplaceFlags); // [nfs2se 0041]
       assets->makeMaterialWithTexturePreload(
         *ctx,
         cHandle,
@@ -1039,6 +1049,7 @@ namespace {
       std::lock_guard lock { s_mutex };
       remixDevice->EmitCs([cHandle = handle](dxvk::DxvkContext* ctx) {
         auto& assets = ctx->getCommonObjects()->getSceneManager().getAssetReplacer();
+        dxvk::fork_hooks::externalMaterialReplaceForget(cHandle); // [nfs2se 0041]
         assets->destroyExternalMaterial(cHandle);
       });
       return REMIXAPI_ERROR_CODE_SUCCESS;

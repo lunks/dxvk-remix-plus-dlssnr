@@ -3,6 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] (nfs2se capifix28, patch 0041)
+
+### Added
+- remixapi_MaterialInfoReplaceEXT (sType 0x4E460004: legacyHash, flags KEEP_ROUGHNESS / KEEP_METALLIC / NO_REPLACE) and the option rtx.capiMaterialReplacement.
+
+### Changed
+- An API draw takes the mod material `mat_<hash>` and the rtx.*Textures list categories (all 24, as a D3D9 draw) by the image hash of its material's albedo texture (or the EXT's legacyHash), instead of by its own constant hash.
+
 ## [0.4.2]
 
 ### Added

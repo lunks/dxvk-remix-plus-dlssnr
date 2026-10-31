@@ -114,19 +114,28 @@ namespace dxvk {
     std::vector<AssetReplacement>* externalDrawMeshReplacement(
       AssetReplacer& replacer, XXH64_hash_t meshHash);
 
-    // Checks for a USD material replacement and updates the material pointer in-place.
+    // [nfs2se 0041] The mod material an API draw takes, as a D3D9 draw takes it: `mat_<legacy hash>` where the legacy hash is
+    // the image hash of the API material's albedo texture (or the hash its remixapi_MaterialInfoReplaceEXT states). Looked up
+    // first by the API material's own hash (as before). Returns `material` itself when nothing replaces it, else a cached copy
+    // of the mod's material with the API material's albedo texture and sampler merged in where the mod states none (what
+    // determineMaterialData does for a D3D9 draw). Writes the legacy hash (0 = none) for externalDrawTextureCategories and
+    // object picking. `handle` is the API material's handle (its Replace EXT, the merge cache).
     // Implementation in rtx_fork_submit.cpp.
-    void externalDrawMaterialReplacement(
-      AssetReplacer& replacer, const MaterialData*& material);
+    const MaterialData* externalDrawResolveMaterial(
+      AssetReplacer& replacer, const MaterialData* material, remixapi_MaterialHandle handle,
+      XXH64_hash_t& legacyHash);
 
-    // Resolves the albedo texture hash from an API material and auto-applies
-    // all texture-based instance categories (Sky, Ignore, WorldUI, etc.).
-    // Writes textureHash out for use by subsequent hooks.
+    // [nfs2se 0041] The host's remixapi_MaterialInfoReplaceEXT of a material (run on the command stream by
+    // remixapi_CreateMaterial / remixapi_DestroyMaterial, like every other use of the table).
+    void externalMaterialReplaceRegister(remixapi_MaterialHandle handle, uint64_t legacyHash, uint32_t flags);
+    void externalMaterialReplaceForget(remixapi_MaterialHandle handle);
+
+    // [nfs2se 0041] Gives the draw the instance categories of every rtx.*Textures list the legacy texture hash is in
+    // (all 24 lists DrawCallState::setupCategoriesForTexture reads for a D3D9 draw). 0 = no texture, no category.
     // Implementation in rtx_fork_submit.cpp.
     void externalDrawTextureCategories(
-      const MaterialData* material,
-      DrawCallState& drawCall,
-      XXH64_hash_t& textureHash);
+      XXH64_hash_t legacyHash,
+      DrawCallState& drawCall);
 
     // Stores per-draw texture hash metadata in SceneManager::m_drawCallMeta
     // when object picking is active, mirroring the D3D9 draw path.
