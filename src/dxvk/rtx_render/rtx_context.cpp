@@ -1492,6 +1492,16 @@ namespace dxvk {
     // DLSS-RR
     constants.enableDLSSRR = useRR;
     constants.setLogValueForDisocclusionMaskForDLSSRR = DxvkRayReconstruction::enableDisocclusionMaskBlur();
+    // [nfs2se 0040] RR only: a mirror-direction hit distance for glossy pixels whose first sampled lobe was diffuse.
+    constants.writeReflectionHitDistance = (useRR && DxvkRayReconstruction::writeReflectionHitDistance()) ? 1u : 0u;
+    constants.reflectionHitDistanceMaxRoughness = DxvkRayReconstruction::reflectionHitDistanceMaxRoughness();
+    constants.reflectionHitDistanceMissValue = DxvkRayReconstruction::reflectionHitDistanceMissValue();
+    constants.reflectionHitDistancePad = 0;
+    if (constants.writeReflectionHitDistance) {
+      const float rrHitMaxRoughness = constants.reflectionHitDistanceMaxRoughness;
+      const float rrHitMissValue = constants.reflectionHitDistanceMissValue;
+      ONCE(Logger::info(str::format("[nfs2se rrhit] DLSS-RR gets a mirror-direction specular hit distance for glossy diffuse-lobe pixels (perceptual roughness <= ", rrHitMaxRoughness, ", miss ", rrHitMissValue, ")")));
+    }
 
     NrdArgs primaryDirectNrdArgs;
     NrdArgs primaryIndirectNrdArgs;

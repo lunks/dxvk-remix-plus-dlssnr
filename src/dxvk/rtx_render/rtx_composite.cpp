@@ -439,7 +439,9 @@ namespace dxvk {
     compositeArgs.enableDemodulateAttenuation = ctx->useRayReconstruction() && rayReconstruction.demodulateAttenuation();
     compositeArgs.enhanceAlbedo = ctx->useRayReconstruction() && rayReconstruction.enableDetailEnhancement();
     compositeArgs.compositeVolumetricLight = ctx->useRayReconstruction() && rayReconstruction.compositeVolumetricLight();
-    compositeArgs.writeRayReconstructionHitDistance = ctx->useRayReconstruction() ? 1u : 0u;
+    // [nfs2se 0040] bit 0 = write the RR hit distance, bit 1 = read it for every active pixel (integrate_nee wrote a mirror-direction value where the first lobe was diffuse).
+    compositeArgs.writeRayReconstructionHitDistance = ctx->useRayReconstruction()
+      ? (1u | (DxvkRayReconstruction::writeReflectionHitDistance() ? 2u : 0u)) : 0u;
 
     NrdArgs primaryDirectNrdArgs;
     NrdArgs primaryIndirectNrdArgs;

@@ -838,7 +838,7 @@ void main(uint2 threadIndex : SV_DispatchThreadID, uint2 localIndex : SV_GroupTh
   {
     float hitDistance = 0;
     if (isIndirectActive && !primaryMiss &&
-        (cb.enableReSTIRGI || geometryFlags.firstSampledLobeIsSpecular))
+        (cb.enableReSTIRGI || geometryFlags.firstSampledLobeIsSpecular || (cb.writeRayReconstructionHitDistance & 2u) != 0u)) // [nfs2se 0040] bit 1: integrate_nee wrote a mirror-direction value for diffuse-lobe pixels too
     {
       hitDistance = PrimaryIndirectSpecularRadianceHitDistance[pixelCoordinate].a;
     }

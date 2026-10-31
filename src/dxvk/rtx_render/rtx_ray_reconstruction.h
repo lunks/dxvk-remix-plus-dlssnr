@@ -90,6 +90,10 @@ namespace dxvk {
                     args.flags = RtxOptionFlags::UserSetting);
     // [nfs2se 0039] DLSS-RR gets pInAnimatedTextureMask: 1 on the pixels whose material changed this frame (an animated texture's next step). Default True; False passes nullptr (the A/B inside one DLL).
     RTX_OPTION("rtx.rayreconstruction", bool, enableAnimatedTextureMask, true, "Pass the animated-texture mask (pixels whose material changed this frame) to DLSS-RR so it down-weights their history.");
+    // [nfs2se 0040] The specular hit distance DLSS-RR gets for a glossy primary surface whose sampled indirect lobe was DIFFUSE (the common case on dielectric paint): the distance along the mirror direction.
+    RTX_OPTION("rtx.rayreconstruction", bool, writeReflectionHitDistance, true, "Write the specular hit distance for every glossy primary surface (perceptual roughness up to reflectionHitDistanceMaxRoughness), not only where the first sampled indirect lobe was specular: one mirror-direction ray per glossy pixel whose lobe was diffuse. DLSS-RR only.");
+    RTX_OPTION("rtx.rayreconstruction", float, reflectionHitDistanceMaxRoughness, 0.3f, "Largest perceptual roughness that gets a mirror-direction hit distance (NvRTX uses 0.3 for its reflection motion vectors).");
+    RTX_OPTION("rtx.rayreconstruction", float, reflectionHitDistanceMissValue, 65504.0f, "Hit distance written when the mirror-direction ray hits nothing. DLSS-RR guide 3.4.9: FP16_MAX (65504) for sky; 0 = unknown (what a missed specular path wrote before 0040).");
     RTX_OPTION("rtx.rayreconstruction", bool, enableDisocclusionMaskBlur, false, "Enables blurring of disocclusion mask to suppress instabilities due to abrupt mask value changes.");
     RTX_OPTION("rtx.rayreconstruction", uint, disocclusionMaskBlurRadius, 32, "Pixel radius to use for blurring disocclusion mask.");
     RTX_OPTION("rtx.rayreconstruction", float, disocclusionMaskBlurNormalizedGaussianWeightSigma, 0.5f,

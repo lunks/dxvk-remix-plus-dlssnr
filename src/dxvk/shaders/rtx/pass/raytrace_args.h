@@ -241,6 +241,12 @@ struct RaytraceArgs {
   uint enableDLSSRR;
   uint setLogValueForDisocclusionMaskForDLSSRR;
 
+  // [nfs2se 0040] DLSS-RR reflection hit distance for glossy pixels whose first sampled lobe was diffuse (integrate_nee.comp.slang). One group of 4x32 bits.
+  uint writeReflectionHitDistance;
+  float reflectionHitDistanceMaxRoughness;
+  float reflectionHitDistanceMissValue;
+  uint reflectionHitDistancePad;
+
   // NOTE: Variables need to be in groups of 4x32 bits above this comment.
 
   uint uniformRandomNumber;

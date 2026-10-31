@@ -76,6 +76,44 @@ void addRadianceToNrcTrainingPathVertex(
   Nrc::debugRegisterNrcRadiance(trainingPixelCoordinate, true, bounceIndex, radiance, dummyThroughput, cb.debugView);
 }
 
+// [nfs2se 0040] DLSS-RR's specular hit distance for a glossy primary whose first sampled indirect lobe was DIFFUSE (the specular lobe output carries no hit distance then, so RR got 0 on most of a
+// dielectric paint). NvRTX writes one for every smooth pixel from a dedicated reflection ray (GenerateMotionVectorForSmoothPixels.usf:394, roughness <= 0.3); here: the closest hit of one ray in the
+// mirror direction, the same ray ReSTIR GI's reflection reprojection already traces (restir_gi_temporal_reuse.comp.slang). DLSS-RR guide 3.4.9: world-space distance from the specular ray origin on
+// the primary surface to the hit point; FP16_MAX for sky, which a miss gets (rtx.rayreconstruction.reflectionHitDistanceMissValue).
+float computeMirrorHitDistance(uvec2 pixelCoordinate, GeometryFlags geometryFlags)
+{
+  const Ray originalPrimaryRay = rayCreatePrimaryFromPixel(cb.camera, pixelCoordinate);
+
+  const MinimalRayInteraction minimalRayInteraction = minimalRayInteractionReadFromGBuffer(
+    originalPrimaryRay, pixelCoordinate, PrimaryViewDirection, PrimaryConeRadius);
+  const MinimalSurfaceInteraction minimalSurfaceInteraction = minimalSurfaceInteractionReadFromGBufferWithError(
+    pixelCoordinate, PrimaryWorldPositionWorldTriangleNormal, PrimaryPositionError);
+  const PolymorphicSurfaceMaterialInteraction polymorphicSurfaceMaterialInteraction = polymorphicSurfaceMaterialInteractionReadFromGBuffer(
+    pixelCoordinate, PrimaryWorldShadingNormal, PrimaryPerceptualRoughness, PrimaryAlbedo, PrimaryBaseReflectivity,
+    SharedMaterialData0, SharedMaterialData1, SharedSurfaceIndex, SharedSubsurfaceData, SharedSubsurfaceDiffusionProfileData);
+
+  if (polymorphicSurfaceMaterialInteractionGetTypeHelper(polymorphicSurfaceMaterialInteraction) != surfaceMaterialTypeOpaque)
+  {
+    return 0.0f;
+  }
+
+  const OpaqueSurfaceMaterialInteraction opaqueSurfaceMaterialInteraction = opaqueSurfaceMaterialInteractionCreate(polymorphicSurfaceMaterialInteraction);
+
+  const float3 viewVector = -minimalRayInteraction.viewDirection;
+  const float3 reflectionVector = reflect(viewVector, opaqueSurfaceMaterialInteraction.shadingNormal);
+
+  uint8_t rayMask = OBJECT_MASK_OPAQUE | (geometryFlags.objectMask & OBJECT_MASK_ALL_DYNAMIC);
+  rayMask |= (cb.enableIndirectAlphaBlendShadows) ? OBJECT_MASK_ALPHA_BLEND : 0;
+
+  const float infiniteHitT = 1e5;
+  const float3 dstPosition = minimalSurfaceInteraction.position + reflectionVector * infiniteHitT;
+  const VisibilityResult visibility = traceVisibilityRay<visibilityModeAccurateHitDistance>(minimalSurfaceInteraction,
+    dstPosition, rayMask, invalidRayPortalIndex, geometryFlags.portalSpace, false,
+    0, 0, 1.0f, geometryFlags.isViewModel);
+
+  return visibility.hasOpaqueHit ? min(visibility.hitDistance, float16Max) : cb.reflectionHitDistanceMissValue;
+}
+
 [shader("compute")]
 [numthreads(INTEGRATE_NEE_THREADS_DISPATCH_WIDTH, INTEGRATE_NEE_THREADS_DISPATCH_HEIGHT, 1)]
 void main(uint2 threadIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupThreadID)
@@ -120,6 +158,12 @@ void main(uint2 threadIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupTh
     else
     {
       indirectDiffuseOutput = indirectRadianceHitDistance;
+
+      // [nfs2se 0040] The lobe sampled was diffuse, so the specular output has no hit distance: give a glossy pixel the mirror-direction one (only .a; the radiance stays as it is).
+      if (cb.writeReflectionHitDistance != 0 && PrimaryPerceptualRoughness[pixelCoordinate] <= cb.reflectionHitDistanceMaxRoughness)
+      {
+        indirectSpecularOutput.a = computeMirrorHitDistance(pixelCoordinate, geometryFlags);
+      }
     }
   }
 
