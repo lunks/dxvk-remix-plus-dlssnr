@@ -274,6 +274,7 @@ namespace dxvk
       Resource m_primarySurfaceFlags;
       Resource m_primaryDisocclusionThresholdMix;
       Resource m_primaryAnimatedTextureMask; // [nfs2se 0039]
+      Resource m_rrResponsivityMask; // [nfs2se 0043]
       AliasedResource m_primaryDisocclusionMaskForRR;
       Resource m_primaryObjectPicking;
 

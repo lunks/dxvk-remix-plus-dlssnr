@@ -98,6 +98,17 @@ namespace dxvk
 
       return ViewToResourceVK(tex->view, isUAV);
     }
+
+    // [nfs2se 0043] Sets pInResponsivityMask when the NGX header has the field (overload chosen by SFINAE; the int overload wins when it compiles).
+    template <typename T>
+    auto nfs2seSetResponsivityMask(T& p, NVSDK_NGX_Resource_VK* r, int) -> decltype(p.pInResponsivityMask = r, bool()) {
+      p.pInResponsivityMask = r;
+      return true;
+    }
+    template <typename T>
+    bool nfs2seSetResponsivityMask(T&, NVSDK_NGX_Resource_VK*, long) {
+      return false;
+    }
   }
 
   // Where the DLSS-NR snippet is looked for, in order. The driver does not deploy this one, so it
@@ -789,6 +800,7 @@ namespace dxvk
     NVSDK_NGX_Resource_VK hitDistanceResource = TextureToResourceVK(buffers.pHitDistance, false);
     NVSDK_NGX_Resource_VK inTransparencyLayerResource = TextureToResourceVK(buffers.pInTransparencyLayer, false);
     NVSDK_NGX_Resource_VK animatedTextureMaskResource = TextureToResourceVK(buffers.pAnimatedTextureMask, false); // [nfs2se 0039]
+    NVSDK_NGX_Resource_VK responsivityMaskResource = TextureToResourceVK(buffers.pResponsivityMask, false); // [nfs2se 0043]
 
     NVSDK_NGX_VK_DLSS_Eval_Params evalParams = {};
     evalParams.Feature.pInColor = &unresolvedColorResource;
@@ -848,6 +860,20 @@ namespace dxvk
       if (!sAnimatedTextureMaskSaid) {
         sAnimatedTextureMaskSaid = true;
         Logger::info("[nfs2se animmask] DLSS-RR is given pInAnimatedTextureMask (rtx.rayreconstruction.enableAnimatedTextureMask)");
+      }
+    }
+
+    // [nfs2se 0043] pInResponsivityMask (310.9.16 header; Preset F only).  The NGX header this build compiles against (packman ngx_sdk_dldn v5) has NO such field (first bench: capifix 'NOT SUPPORTED'): then the
+    // DLL is told through the NGX parameter the 310.9.16 helper would set (NVSDK_NGX_Parameter_DLSSD_ResponsivityMask = "DLSSD.ResponsivityMask", a NVSDK_NGX_Resource_VK*); the old helper never writes that key.
+    if (buffers.pResponsivityMask) {
+      static bool sResponsivitySaid = false;
+      const bool viaField = nfs2seSetResponsivityMask(evalParams_DLDN, &responsivityMaskResource, 0);
+      if (!viaField) {
+        m_parameters->Set("DLSSD.ResponsivityMask", (void*) &responsivityMaskResource);
+      }
+      if (!sResponsivitySaid) {
+        sResponsivitySaid = true;
+        Logger::info(str::format("[nfs2se rrresp] DLSS-RR responsivity mask given ", viaField ? "through the eval struct field" : "through the NGX parameter DLSSD.ResponsivityMask (header without the field)", " (rtx.rayreconstruction.responsivityMask)"));
       }
     }
 

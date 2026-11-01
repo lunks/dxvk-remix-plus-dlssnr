@@ -263,6 +263,7 @@ namespace dxvk {
       const Resources::Resource* pInTransparencyLayer;
       const Resources::Resource* pDisocclusionMask;
       const Resources::Resource* pAnimatedTextureMask = nullptr; // [nfs2se 0039]
+      const Resources::Resource* pResponsivityMask = nullptr; // [nfs2se 0043]
     };
 
     struct NGXSettings {

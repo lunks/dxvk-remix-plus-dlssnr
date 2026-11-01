@@ -89,6 +89,9 @@ namespace dxvk {
                     args.environment = "RTX_RAY_RECONSTRUCTION_MODEL",
                     args.flags = RtxOptionFlags::UserSetting);
     // [nfs2se 0039] DLSS-RR gets pInAnimatedTextureMask: 1 on the pixels whose material changed this frame (an animated texture's next step). Default True; False passes nullptr (the A/B inside one DLL).
+    // [nfs2se 0043] DLSS-RR responsivity mask (the guide 3.4.14, Preset F ONLY): a constant per-pixel hint in [-1, 1]; 0 = no mask passed (the capifix28 behaviour); negative = less responsive (less boiling, more ghosting).
+    // Read when the render-resolution mask image is created (start-up or a resolution change).
+    RTX_OPTION("rtx.rayreconstruction", float, responsivityMask, 0.0f, "Constant DLSS-RR responsivity mask value in [-1, 1] (Preset F only; 0 = off). Negative values make RR less responsive to input changes (less flicker / boiling, more ghosting). Read at resource creation.");
     RTX_OPTION("rtx.rayreconstruction", bool, enableAnimatedTextureMask, true, "Pass the animated-texture mask (pixels whose material changed this frame) to DLSS-RR so it down-weights their history.");
     // [nfs2se 0040] The specular hit distance DLSS-RR gets for a glossy primary surface whose sampled indirect lobe was DIFFUSE (the common case on dielectric paint): the distance along the mirror direction.
     RTX_OPTION("rtx.rayreconstruction", bool, writeReflectionHitDistance, true, "Write the specular hit distance for every glossy primary surface (perceptual roughness up to reflectionHitDistanceMaxRoughness), not only where the first sampled indirect lobe was specular: one mirror-direction ray per glossy pixel whose lobe was diffuse. DLSS-RR only.");

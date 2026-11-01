@@ -248,6 +248,7 @@ namespace dxvk {
         rtOutput.m_rayReconstructionHitDistance.view(Resources::AccessType::Read)
       };
       pInputs.push_back(rtOutput.m_primaryAnimatedTextureMask.view); // [nfs2se 0039]
+      pInputs.push_back(rtOutput.m_rrResponsivityMask.view); // [nfs2se 0043]
 
       const DxvkAutoExposure& autoExposure = device()->getCommon()->metaAutoExposure();
       if (!mAutoExposure) {
@@ -326,6 +327,7 @@ namespace dxvk {
         : &rtOutput.m_primaryDisocclusionThresholdMix;
 
       buffers.pAnimatedTextureMask = enableAnimatedTextureMask() ? &rtOutput.m_primaryAnimatedTextureMask : nullptr; // [nfs2se 0039]
+      buffers.pResponsivityMask = responsivityMask() != 0.0f ? &rtOutput.m_rrResponsivityMask : nullptr; // [nfs2se 0043]
 
       NGXRayReconstructionContext::NGXSettings settings;
       settings.resetAccumulation = resetHistory;
