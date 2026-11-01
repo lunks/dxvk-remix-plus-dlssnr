@@ -38,6 +38,7 @@
 #include "rtx_texture_manager.h"
 #include "rtx_debug_view.h"
 #include "rtx_xess.h"
+#include "rtx_ray_reconstruction.h" // [nfs2se 0043]
 #include "rtx_fork_hooks.h"
 #include "../util/util_global_time.h"
 
@@ -1103,6 +1104,9 @@ namespace dxvk {
     m_raytracingOutput.m_primarySurfaceFlags = createImageResource(ctx, "primary surface flags", m_downscaledExtent, VK_FORMAT_R8_UINT);
     m_raytracingOutput.m_primaryDisocclusionThresholdMix = createImageResource(ctx, "primary disocclusion threshold mix", m_downscaledExtent, VK_FORMAT_R16_SFLOAT);
     m_raytracingOutput.m_primaryAnimatedTextureMask = createImageResource(ctx, "primary animated texture mask", m_downscaledExtent, VK_FORMAT_R8_UNORM); // [nfs2se 0039]
+    // [nfs2se 0043] the RR responsivity mask: one constant for the whole frame, written once by the creation clear (R16F; read by DLSS-RR Preset F only)
+    m_raytracingOutput.m_rrResponsivityMask = createImageResource(ctx, "rr responsivity mask", m_downscaledExtent, VK_FORMAT_R16_SFLOAT, 1, VK_IMAGE_TYPE_2D, VK_IMAGE_VIEW_TYPE_2D, 0, VK_IMAGE_USAGE_STORAGE_BIT,
+      VkClearColorValue{ { DxvkRayReconstruction::responsivityMask(), 0.0f, 0.0f, 0.0f } });
     m_raytracingOutput.m_primaryDisocclusionMaskForRR = AliasedResource(m_raytracingOutput.m_sharedSurfaceIndex, ctx, m_downscaledExtent, VK_FORMAT_R32_SFLOAT, "primary disocclusion mask for ray reconstruction", allowCompatibleFormatAliasing);
 
     if (m_raytracingOutput.m_primaryObjectPicking.isValid()) {
