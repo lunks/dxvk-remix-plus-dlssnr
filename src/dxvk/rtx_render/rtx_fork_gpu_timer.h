@@ -15,6 +15,7 @@
 #include "../dxvk_device.h"
 #include "../../util/log/log.h"
 #include "../../util/util_string.h"
+#include "../../util/util_fork_frame_trace.h" // [nfs2se 0042]
 
 namespace dxvk {
 
@@ -40,19 +41,32 @@ namespace dxvk {
       m_device->vkd()->vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_pool, m_slot * m_marks);
       m_inFrame = true;
       m_written[m_slot] = false;
+      m_devFrame[m_slot] = device->getCurrentFrameId(); // [nfs2se 0042]
+      m_cpu[0] = nfs2seft::nowMs();
     }
+
+    // [nfs2se 0042] the CPU time (ms on the recording thread) at injectRTX's entry, for the "pre" part of the CPU line.
+    void setCpuEntry(double ms) { m_cpuEntry = ms; }
 
     void mark(VkCommandBuffer cmd, uint32_t i) {
       if (!m_inFrame || i == 0 || i >= m_marks) {
         return;
       }
       m_device->vkd()->vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_pool, m_slot * m_marks + i);
+      if (i < 32) { m_cpu[i] = nfs2seft::nowMs(); } // [nfs2se 0042]
     }
 
     void endFrame() {
       if (m_inFrame) {
         m_written[m_slot] = true;
         m_frameSeq[m_slot] = ++m_seq;
+        // [nfs2se 0042] one CPU line per ray-traced frame: ms spent RECORDING each stage on the recording thread
+        std::string l = str::format("cpu ", m_name, " id=", m_devFrame[m_slot], " pre=", int((m_cpu[0] - m_cpuEntry) * 10.0));
+        for (size_t i = 0; i < m_stageNames.size(); ++i) {
+          l += str::format(" ", m_stageNames[i], "=", int((m_cpu[i + 1] - m_cpu[i]) * 10.0));
+        }
+        l += str::format(" total=", int((m_cpu[m_marks - 1] - m_cpuEntry) * 10.0), " (tenths of ms)");
+        nfs2seft::line("%s", l.c_str());
       }
       m_inFrame = false;
     }
@@ -109,6 +123,18 @@ namespace dxvk {
         m_sum[i] += double(t[i + 1] - t[i]) * msPerTick;
       }
       m_total += double(t[m_marks - 1] - t[0]) * msPerTick;
+      { // [nfs2se 0042] one GPU line per ray-traced frame (read kRing frames late; id = the device frame id it was recorded in)
+        std::string l = str::format("gpu ", m_name, " id=", m_devFrame[slot]);
+        for (size_t i = 0; i + 1 < m_marks; ++i) {
+          l += str::format(" ", m_stageNames[i], "=", int(double(t[i + 1] - t[i]) * msPerTick * 10.0));
+        }
+        l += str::format(" total=", int(double(t[m_marks - 1] - t[0]) * msPerTick * 10.0));
+        if (m_havePrev && m_frameSeq[slot] == m_prevSeq + 1) {
+          l += str::format(" outside=", int(double(t[0] - m_prevEnd) * msPerTick * 10.0), " interval=", int(double(t[0] - m_prevBegin) * msPerTick * 10.0));
+        }
+        l += " (tenths of ms)";
+        nfs2seft::line("%s", l.c_str());
+      }
       // Consecutive frames only: the gap from the previous frame's last mark and the frame-to-frame interval.
       if (m_havePrev && m_frameSeq[slot] == m_prevSeq + 1) {
         m_outside += double(t[0] - m_prevEnd) * msPerTick;
@@ -153,6 +179,9 @@ namespace dxvk {
     bool m_inFrame = false;
     bool m_written[kRing] = {};
     uint64_t m_frameSeq[kRing] = {};
+    uint32_t m_devFrame[kRing] = {};   // [nfs2se 0042]
+    double m_cpu[32] = {};
+    double m_cpuEntry = 0.0;
     uint64_t m_seq = 0;
     bool m_havePrev = false;
     uint64_t m_prevSeq = 0;

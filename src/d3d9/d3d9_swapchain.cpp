@@ -32,6 +32,7 @@
 #include "../util/util_string.h"
 #include "../dxvk/rtx_render/rtx_bridge_message_channel.h"
 #include "../dxvk/dxvk_scoped_annotation.h"
+#include "../util/util_fork_frame_trace.h" // [nfs2se 0042]
 
 // NV-DXVK start: DLFG integration
 #include "../dxvk/rtx_render/rtx_dlfg.h"
@@ -1173,6 +1174,7 @@ namespace dxvk {
 
   void D3D9SwapChainEx::PresentImage(UINT SyncInterval) {
     ScopedCpuProfileZone();
+    const double nfs2seFsT0 = nfs2seft::nowMs(); // [nfs2se 0042] game-thread breakdown of one Present
 
     // [nfs2se 0021] the staging image for HUD-less frame generation follows the backbuffer; created (or dropped) before the flush below so the
     // CS thread learns it before the present blit reads it; the first frame after a change interpolates without it (hudless = false)
@@ -1198,7 +1200,9 @@ namespace dxvk {
       }
     }
 
+    const double nfs2seFsPreFlush = nfs2seft::nowMs();
     m_parent->Flush();
+    const double nfs2seFsFlush = nfs2seft::nowMs();
 
     // NV-DXVK start: Reflex integration
     auto& reflex = m_device->getCommon()->metaReflex();
@@ -1225,10 +1229,15 @@ namespace dxvk {
 
     // Bump our frame id.
     ++m_frameId;
+    const double nfs2seFsPre = nfs2seft::nowMs();
     SyncFrameLatency();
+    const double nfs2seFsLat = nfs2seft::nowMs();
+    double nfs2seFsSyncP = 0.0, nfs2seFsAcq = 0.0;
 
     for (uint32_t i = 0; i < SyncInterval || i < 1; i++) {
+      const double nfs2seFsA = nfs2seft::nowMs();
       SynchronizePresent();
+      nfs2seFsSyncP += nfs2seft::nowMs() - nfs2seFsA;
 
       // NV-DXVK start: DLFG integration
       vk::Presenter* presenter = GetPresenter();
@@ -1243,7 +1252,9 @@ namespace dxvk {
       uint32_t imageIndex = 0;
 
       // NV-DXVK start: DLFG integration
+      const double nfs2seFsB = nfs2seft::nowMs();
       VkResult status = presenter->acquireNextImage(sync, imageIndex);
+      nfs2seFsAcq += nfs2seft::nowMs() - nfs2seFsB;
       // NV-DXVK end
 
       while (status != VK_SUCCESS) {
@@ -1309,7 +1320,9 @@ namespace dxvk {
     // NV-DXVK start: Reflex integration
     // Note: Sleeping here in the present function essentially makes it so when the application calls into a D3D Present function it will block for the desired amount of time Reflex indicates.
     // This helps accomplish what Reflex desires by delaying the point at which the application does input sampling likely near the start of its simulation on the next frame, thus reducing latency.
+    const double nfs2seFsRx0 = nfs2seft::nowMs();
     reflex.sleep();
+    const double nfs2seFsRx1 = nfs2seft::nowMs();
 
     // Note: Increment the Reflex Frame ID to prepare for the next frame, now that this Reflex frame has ended.
     // Take care to ensure this happens after all other application thread operations call GetReflexFrameId for this frame
@@ -1324,6 +1337,15 @@ namespace dxvk {
     // Tell tracy its the end of the frame
     FrameMark;
     // NV-DXVK end
+    // [nfs2se 0042] ms: pre = the HUD-less staging, flush = m_parent->Flush(), lat = SyncFrameLatency (the GPU of frame N-latency), syncp = SynchronizePresent,
+    // acq = acquireNextImage, mid = the rest of the present loop, reflex = reflex.sleep(), tot = the whole call (tenths of ms)
+    {
+      const double nfs2seFsEnd = nfs2seft::nowMs();
+      nfs2seft::line("present id=%u pre=%d flush=%d lat=%d syncp=%d acq=%d mid=%d reflex=%d tot=%d (tenths of ms)", uint32_t(m_frameId),
+        int((nfs2seFsPreFlush - nfs2seFsT0) * 10.0), int((nfs2seFsFlush - nfs2seFsPreFlush) * 10.0), int((nfs2seFsLat - nfs2seFsPre) * 10.0),
+        int(nfs2seFsSyncP * 10.0), int(nfs2seFsAcq * 10.0),
+        int((nfs2seFsRx0 - nfs2seFsLat - nfs2seFsSyncP - nfs2seFsAcq) * 10.0), int((nfs2seFsRx1 - nfs2seFsRx0) * 10.0), int((nfs2seFsEnd - nfs2seFsT0) * 10.0));
+    }
   }
 
 

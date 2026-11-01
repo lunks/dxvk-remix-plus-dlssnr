@@ -32,6 +32,7 @@
 #include "dxvk_adapter.h"
 #include "rtx_context.h"
 #include "rtx_fork_gpu_timer.h" // [nfs2se 0015]
+#include "../../util/util_fork_frame_trace.h" // [nfs2se 0042]
 #include "rtx_asset_exporter.h"
 #include "rtx_options.h"
 #include "rtx_bindless_resource_manager.h"
@@ -508,6 +509,7 @@ namespace dxvk {
   // Hooked into D3D9 presentImage (same place HUD rendering is)
   void RtxContext::injectRTX(std::uint64_t cachedReflexFrameId, Rc<DxvkImage> targetImage) {
     ScopedCpuProfileZone();
+    const double nfs2seFsEntry = nfs2seft::nowMs(); // [nfs2se 0042]
 #ifdef REMIX_DEVELOPMENT
     m_currentPassStage = RtxFramePassStage::FrameBegin;
 #endif
@@ -526,6 +528,12 @@ namespace dxvk {
 #endif
 
     commitGraphicsState<true, false>();
+    { // [nfs2se 0042]
+      const double nfs2seFsCommit = nfs2seft::nowMs() - nfs2seFsEntry;
+      if (nfs2seFsCommit >= 1.0) {
+        nfs2seft::line("inject-commit id=%u commit_ms=%.1f", m_device->getCurrentFrameId(), nfs2seFsCommit);
+      }
+    }
 
     auto common = getCommonObjects();
     const auto isRaytracingEnabled = RtxOptions::enableRaytracing();
@@ -676,6 +684,7 @@ namespace dxvk {
       const bool nfs2seGpuTimers = RtxOptions::nfs2seGpuTimers();
       if (nfs2seGpuTimers) {
         s_nfs2seGpuTimer.beginFrame(m_device.ptr(), getCmdBuffer(DxvkCmdBuffer::ExecBuffer));
+        s_nfs2seGpuTimer.setCpuEntry(nfs2seFsEntry); // [nfs2se 0042]
       }
 
       // Update all the GPU buffers needed to describe the scene

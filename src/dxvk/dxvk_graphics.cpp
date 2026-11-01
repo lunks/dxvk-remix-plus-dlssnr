@@ -1,4 +1,5 @@
 #include "../util/util_time.h"
+#include "../util/util_fork_frame_trace.h" // [nfs2se 0042]
 
 #include "dxvk_device.h"
 #include "dxvk_graphics.h"
@@ -410,11 +411,20 @@ namespace dxvk {
       t0 = dxvk::high_resolution_clock::now();
     
     VkPipeline pipeline = VK_NULL_HANDLE;
+    const double nfs2seFsT0 = nfs2seft::nowMs(); // [nfs2se 0042]
     if (m_vkd->vkCreateGraphicsPipelines(m_vkd->device(),
           m_pipeMgr->m_cache->handle(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
       Logger::err("DxvkGraphicsPipeline: Failed to compile pipeline");
       this->logPipelineState(LogLevel::Error, state);
       return VK_NULL_HANDLE;
+    }
+    { // [nfs2se 0042]
+      const double ms = nfs2seft::nowMs() - nfs2seFsT0;
+      if (ms >= 1.0) {
+        const std::string vsn = m_shaders.vs != nullptr ? m_shaders.vs->debugName() : std::string("-");
+        const std::string fsn = m_shaders.fs != nullptr ? m_shaders.fs->debugName() : std::string("-");
+        nfs2seft::line("pipeline gfx ms=%.1f vs=%s fs=%s", ms, vsn.c_str(), fsn.c_str());
+      }
     }
     
     if (Logger::logLevel() <= LogLevel::Debug) {

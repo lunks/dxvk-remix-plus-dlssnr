@@ -9,6 +9,7 @@
 #include "rtx_render/rtx_opacity_micromap_manager.h"
 #include "../util/util_threadpool.h"
 #include "../util/util_singleton.h"
+#include "../util/util_fork_frame_trace.h" // [nfs2se 0042]
 
 namespace dxvk {
   namespace WAR4000939 {
@@ -167,6 +168,7 @@ namespace dxvk {
   void DxvkRaytracingPipeline::compilePipeline() {
     ScopedCpuProfileZone();
 
+    const double nfs2seFsT0 = nfs2seft::nowMs(); // [nfs2se 0042]
     std::lock_guard<dxvk::mutex> lock(m_mutex);
 
     if (!m_isCompiled) {
@@ -177,6 +179,7 @@ namespace dxvk {
       createPipeline();
       createShaderBindingTable();
       releaseTmpResources();
+      nfs2seft::line("pipeline rt ms=%.1f (incl. lock wait) %s", nfs2seft::nowMs() - nfs2seFsT0, m_shaders.debugName ? m_shaders.debugName : "-"); // [nfs2se 0042]
 
       m_isCompiled = true;
 

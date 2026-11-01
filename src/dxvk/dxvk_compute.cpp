@@ -22,6 +22,7 @@
 #include <cstring>
 
 #include "../util/util_time.h"
+#include "../util/util_fork_frame_trace.h" // [nfs2se 0042]
 
 #include "dxvk_compute.h"
 #include "dxvk_device.h"
@@ -180,11 +181,18 @@ namespace dxvk {
       t0 = dxvk::high_resolution_clock::now();
     
     VkPipeline pipeline = VK_NULL_HANDLE;
+    const double nfs2seFsT0 = nfs2seft::nowMs(); // [nfs2se 0042]
     if (m_vkd->vkCreateComputePipelines(m_vkd->device(),
           m_pipeMgr->m_cache->handle(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
       Logger::err("DxvkComputePipeline: Failed to compile pipeline");
       Logger::err(str::format("  cs  : ", m_shaders.cs->debugName()));
       return VK_NULL_HANDLE;
+    }
+    { // [nfs2se 0042]
+      const double ms = nfs2seft::nowMs() - nfs2seFsT0;
+      if (ms >= 1.0) {
+        nfs2seft::line("pipeline cs ms=%.1f cs=%s", ms, m_shaders.cs->debugName().c_str());
+      }
     }
     
     if (Logger::logLevel() <= LogLevel::Debug) {
