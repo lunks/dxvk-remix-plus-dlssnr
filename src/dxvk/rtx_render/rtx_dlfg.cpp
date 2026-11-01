@@ -1661,10 +1661,14 @@ namespace dxvk {
                                                     primaryScreenSpaceMotionVector,
                                                     primaryDepth,
                                                     camera,
-                                                    Vector2(1.0f, 1.0f),
+                                                    ((nfs2seInputMode() & 1u) != 0u)
+                                                      ? Vector2(1.0f / float(primaryScreenSpaceMotionVector->imageInfo().extent.width),
+                                                                1.0f / float(primaryScreenSpaceMotionVector->imageInfo().extent.height))
+                                                      : Vector2(1.0f, 1.0f),  // [nfs2se 0043]
                                                     interpolatedFrameIndex,
                                                     interpolatedFrameCount,
-                                                    resetHistory);
+                                                    resetHistory,
+                                                    (nfs2seInputMode() & 2u) != 0u);
 
       switch (res) {
       case NGXDLFGContext::EvaluateResult::Failure:

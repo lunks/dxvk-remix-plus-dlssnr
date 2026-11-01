@@ -358,7 +358,8 @@ namespace dxvk {
       Vector2 motionVectorScale,
       uint32_t interpolatedFrameIndex,
       uint32_t interpolatedFrameCount,
-      bool resetHistory);
+      bool resetHistory,
+      bool zeroJitter = false);  // [nfs2se 0043]
 
     void releaseNGXFeature() override;
 

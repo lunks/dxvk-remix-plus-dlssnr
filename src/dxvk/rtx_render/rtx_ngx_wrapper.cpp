@@ -968,7 +968,8 @@ namespace dxvk
                                                           Vector2 motionVectorScale,
                                                           uint32_t interpolatedFrameIndex,
                                                           uint32_t interpolatedFrameCount,
-                                                          bool resetHistory) {
+                                                          bool resetHistory,
+                                                          bool zeroJitter) {
     ScopedCpuProfileZone();
     
     auto ngxColorBuffer = ViewToResourceVK(compositedColorBuffer, true);
@@ -999,6 +1000,7 @@ namespace dxvk
     toNGX(consts.prevClipToClip, prevClipToClip);
 
     camera.getJittering(consts.jitterOffset);
+    if (zeroJitter) { consts.jitterOffset[0] = 0.0f; consts.jitterOffset[1] = 0.0f; }  // [nfs2se 0043]
     toNGX(consts.mvecScale, motionVectorScale);
     toNGX(consts.cameraPinholeOffset, Vector2(0.0, 0.0));
     toNGX(consts.cameraPos, camera.getPosition());

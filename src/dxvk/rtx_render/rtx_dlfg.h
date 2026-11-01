@@ -343,6 +343,9 @@ namespace dxvk {
     // [nfs2se 0022] DIAGNOSTIC (bench only)
     RTX_OPTION("rtx.dlfg", uint32_t, nfs2seDumpAfter, 0, "Diagnostic: after this many frame-generation batches, write every presented image (generated and rendered) of the next batches to fgdump/ next to the exe as BMP. 0 = off.");
     RTX_OPTION("rtx.dlfg", uint32_t, nfs2seDumpCount, 24, "Diagnostic: how many presented images rtx.dlfg.nfs2seDumpAfter writes.");
+    // [nfs2se 0043] DIAGNOSTIC: the NGX DLSS-G inputs (research/image-stability-capi.md 19). bit 0: mvecScale = 1 / MV image extent (the NGX header: "scale factors used to normalize motion vectors, so the values are in [-1,1]";
+    // Remix writes pixel-unit vectors and passes 1,1); bit 1: jitterOffset = 0 (the matrices carry no jitter). 0 = stock.
+    RTX_OPTION("rtx.dlfg", uint32_t, nfs2seInputMode, 0, "Diagnostic: bit 0 normalise the motion-vector scale by the MV image size, bit 1 zero the jitter offset handed to DLSS-G. 0 = stock.");
     const Rc<DxvkImage>& getHudlessStaging() const { return m_hudlessStaging; }
 
   private:
