@@ -5,7 +5,7 @@
 #include "rtx/concept/surface_material/surface_material.slangh"
 #include "rtx/utility/geometry_flags.slangh"
 #include "RtxdiApplicationBridge.slangh"
-#include "rtxdi/ResamplingFunctions.slangh"
+#include "ResamplingFunctions.slangh"
 
 // RTXDI gradient pass needs to tell if an object is stationary or not.
 // It compares the length of world-space motion vectors to the position error scaled by this factor.
