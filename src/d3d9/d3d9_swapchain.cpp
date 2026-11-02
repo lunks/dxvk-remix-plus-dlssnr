@@ -550,8 +550,9 @@ namespace dxvk {
     m_dirty    |= UpdatePresentRegion(pSourceRect, pDestRect);
     m_dirty    |= recreate;
     // NV-DXVK start: DLFG integration
+    // NFS2SE: also retry while the back-buffer views are missing (a failed RecreateSwapChain leaves none).
     m_dirty    |= GetPresenter() != nullptr &&
-                  !GetPresenter()->hasSwapChain();
+                  (!GetPresenter()->hasSwapChain() || m_imageViews.empty());
     // NV-DXVK end
 
     m_vsync     = vsync;
@@ -570,7 +571,7 @@ namespace dxvk {
       // just end up crashing (like with alt-tab loss)
       
       // NV-DXVK start: DLFG integration
-      if (!GetPresenter()->hasSwapChain())
+      if (!GetPresenter()->hasSwapChain() || m_imageViews.empty())
       // NV-DXVK end
         return D3D_OK;
 
@@ -1417,6 +1418,13 @@ namespace dxvk {
 
     if (GetPresenter()->recreateSwapChain(presenterDesc) != VK_SUCCESS) {
       //throw DxvkError("D3D9SwapChainEx: Failed to recreate swap chain");
+      // NFS2SE: a failed recreate (the window or its surface is gone) leaves the presenter without images but with its old image
+      // count, and CreateRenderTargetViews() below then threw std::out_of_range from Presenter::getImage(), which nothing catches
+      // (the T164 owner session died of it, exit 83).  Keep no views: Present returns D3D_OK and retries on the next frame.
+      if (!m_imageViews.empty())   // once per loss, not once per retried frame
+        Logger::warn("D3D9SwapChainEx: recreating the swap chain failed, presenting is paused until it succeeds");
+      m_imageViews.clear();
+      return;
     }
     // NV-DXVK end
     
