@@ -202,6 +202,14 @@ namespace dxvk::vk {
     if (m_swapchain)
       destroySwapchain();
 
+    // NFS2SE: a surface lost earlier whose re-creation failed (the window is gone) is a null handle now; try again, and let a failure
+    // go back to the caller as it is: every failed attempt used to leave the destroyed handle in m_surface and the next one destroyed it twice.
+    if (!m_surface) {
+      VkResult surfaceStatus = createSurface();
+      if (surfaceStatus != VK_SUCCESS)
+        return surfaceStatus;
+    }
+
     // Query surface capabilities. Some properties might
     // have changed, including the size limits and supported
     // present modes, so we'll just query everything again.
@@ -636,8 +644,10 @@ namespace dxvk::vk {
     VkResult status = m_vki->vkCreateWin32SurfaceKHR(
       m_vki->instance(), &info, nullptr, &m_surface);
     
-    if (status != VK_SUCCESS)
+    if (status != VK_SUCCESS) {
+      m_surface = VK_NULL_HANDLE;   // NFS2SE: the output handle of a failed create is not defined; never keep a stale one
       return status;
+    }
     
     VkBool32 supportStatus = VK_FALSE;
 
@@ -647,6 +657,7 @@ namespace dxvk::vk {
     
     if (!supportStatus) {
       m_vki->vkDestroySurfaceKHR(m_vki->instance(), m_surface, nullptr);
+      m_surface = VK_NULL_HANDLE;
       return VK_ERROR_OUT_OF_HOST_MEMORY; // just abuse this
     }
 
@@ -675,7 +686,10 @@ namespace dxvk::vk {
 
 
   void Presenter::destroySurface() {
+    if (!m_surface)   // NFS2SE: idempotent (a second destroy of the same handle crashed inside libvulkan, Wine exit 3)
+      return;
     m_vki->vkDestroySurfaceKHR(m_vki->instance(), m_surface, nullptr);
+    m_surface = VK_NULL_HANDLE;
   }
 
   // NV-DXVK start: App Controlled FSE
