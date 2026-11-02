@@ -294,6 +294,9 @@ namespace dxvk {
   void DxvkRtxdiRayQuery::showImguiSettings() {
     RemixGui::SliderInt("Initial Sample Count", &initialSampleCountObject(), 1, 64);
     RemixGui::Checkbox("Sample Best Lights", &enableBestLightSamplingObject());
+    if (enableBestLightSampling()) {
+      RemixGui::Checkbox("Jitter Best Light Lookup", &enableBestLightJitterObject());
+    }
     RemixGui::Checkbox("Initial Visibility", &enableInitialVisibilityObject());
     RemixGui::Separator();
     RemixGui::Checkbox("Temporal Reuse", &enableTemporalReuseObject());
@@ -357,6 +360,12 @@ namespace dxvk {
     const bool isRtxdiBestLightsValid = rtOutput.m_rtxdiBestLights.matchesWriteFrameIdx(rtOutput.m_raytraceArgs.frameIdx - 1);
 
     rtOutput.m_raytraceArgs.enableRtxdiBestLightSampling = enableBestLightSampling() && isRtxdiBestLightsValid;
+    rtOutput.m_raytraceArgs.enableRtxdiBestLightJitter = enableBestLightJitter();
+    // nfs2se: the EFFECTIVE value (the RR preset used to write False into a layer above rtx.conf, so the conf echo proves nothing); smoke check rtxdi-best-light.toml reads these two lines
+    ONCE(Logger::info(std::string("[nfs2se rtxdi] best-light sampling option ") + (enableBestLightSampling() ? "on" : "off") + ", jitter " + (enableBestLightJitter() ? "on" : "off")));
+    if (rtOutput.m_raytraceArgs.enableRtxdiBestLightSampling) {
+      ONCE(Logger::info("[nfs2se rtxdi] best-light sampling active (the previous frame's best-light texture is valid)"));
+    }
     // Note: initialSamples is not written here, it's used in LightManager::setRaytraceArgs
     // to derive the per-light-type sample counts
   }
