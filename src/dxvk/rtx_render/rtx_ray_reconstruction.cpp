@@ -46,6 +46,9 @@
 #include "rtx_restir_gi_rayquery.h"
 #include "../util/log/log.h" // [nfs2se 0045]
 #include "../util/util_string.h" // [nfs2se 0045]
+#include <algorithm> // [nfs2se 0046]
+#include <cstring> // [nfs2se 0046]
+#include <vector> // [nfs2se 0046]
 
 namespace dxvk {
 
@@ -153,7 +156,29 @@ namespace dxvk {
       forceRange.layerCount = 1;
       forceRange.levelCount = 1;
       forceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      ctx->clearColorImage(rtOutput.m_primaryDisocclusionThresholdMix.image, forceValue, forceRange);
+      const bool wholeFrame = nfs2seForceRectX0() <= 0.0f && nfs2seForceRectY0() <= 0.0f && nfs2seForceRectX1() >= 1.0f && nfs2seForceRectY1() >= 1.0f;
+      if (wholeFrame) {
+        ctx->clearColorImage(rtOutput.m_primaryDisocclusionThresholdMix.image, forceValue, forceRange);
+      } else {
+        // [nfs2se 0046] a rectangle only, uploaded as R16F texels (updateImage: the generic transfer path)
+        const VkExtent3D full = rtOutput.m_primaryDisocclusionThresholdMix.image->info().extent;
+        const int32_t rx0 = int32_t(std::max(0.0f, nfs2seForceRectX0()) * full.width), ry0 = int32_t(std::max(0.0f, nfs2seForceRectY0()) * full.height);
+        const int32_t rx1 = int32_t(std::min(1.0f, nfs2seForceRectX1()) * full.width), ry1 = int32_t(std::min(1.0f, nfs2seForceRectY1()) * full.height);
+        if (rx1 > rx0 && ry1 > ry0) {
+          // IEEE half of a positive normal float (the forced value is a plain positive number, 1 .. 65504)
+          const float fv = nfs2seForceDisocclusion();
+          uint32_t bits;
+          std::memcpy(&bits, &fv, sizeof(bits));
+          const int32_t he = int32_t((bits >> 23) & 0xff) - 127 + 15;
+          const uint16_t half = uint16_t(uint16_t(std::min(30, std::max(1, he)) << 10) | uint16_t((bits >> 13) & 0x3ff));
+          std::vector<uint16_t> texels(size_t(rx1 - rx0) * size_t(ry1 - ry0), half);
+          VkImageSubresourceLayers layers = {};
+          layers.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          layers.layerCount = 1;
+          ctx->updateImage(rtOutput.m_primaryDisocclusionThresholdMix.image, layers, VkOffset3D{ rx0, ry0, 0 }, VkExtent3D{ uint32_t(rx1 - rx0), uint32_t(ry1 - ry0), 1 },
+                           texels.data(), VkDeviceSize(rx1 - rx0) * 2, 0);
+        }
+      }
       static bool sForceSaid = false;
       if (!sForceSaid) {
         sForceSaid = true;

@@ -93,6 +93,11 @@ namespace dxvk {
     // measurement); nfs2seForceDisocclusion > 0 overwrites the primary disocclusion input with that value on EVERY pixel before RR reads it (10000 = "discard history everywhere": decides whether the model in use reads the mask).
     RTX_OPTION("rtx.rayreconstruction", bool, nfs2seResetEveryFrame, false, "DIAGNOSTIC: reset DLSS-RR's temporal history every frame.");
     RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceDisocclusion, 0.0f, "DIAGNOSTIC: > 0 writes this value into the primary disocclusion mask of every pixel before DLSS-RR reads it (10000 = discard history).");
+    // [nfs2se 0046] DIAGNOSTIC: the forced disocclusion value is written only inside this screen rectangle (fractions of the render frame: x0 y0 x1 y1); the default 0 0 1 1 is the whole frame (patch 0045). A car-fixed screen footprint for the headlamp pool.
+    RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceRectX0, 0.0f, "DIAGNOSTIC: forced-disocclusion rectangle, left (fraction of the frame width).");
+    RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceRectY0, 0.0f, "DIAGNOSTIC: forced-disocclusion rectangle, top.");
+    RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceRectX1, 1.0f, "DIAGNOSTIC: forced-disocclusion rectangle, right.");
+    RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceRectY1, 1.0f, "DIAGNOSTIC: forced-disocclusion rectangle, bottom.");
     RTX_OPTION("rtx.rayreconstruction", bool, enableAnimatedTextureMask, true, "Pass the animated-texture mask (pixels whose material changed this frame) to DLSS-RR so it down-weights their history.");
     // [nfs2se 0040] The specular hit distance DLSS-RR gets for a glossy primary surface whose sampled indirect lobe was DIFFUSE (the common case on dielectric paint): the distance along the mirror direction.
     RTX_OPTION("rtx.rayreconstruction", bool, writeReflectionHitDistance, true, "Write the specular hit distance for every glossy primary surface (perceptual roughness up to reflectionHitDistanceMaxRoughness), not only where the first sampled indirect lobe was specular: one mirror-direction ray per glossy pixel whose lobe was diffuse. DLSS-RR only.");
