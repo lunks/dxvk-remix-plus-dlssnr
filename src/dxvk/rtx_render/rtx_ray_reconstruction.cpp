@@ -44,6 +44,8 @@
 #include "rtx_shader_manager.h"
 #include "rtx_ray_reconstruction.h"
 #include "rtx_restir_gi_rayquery.h"
+#include "../util/log/log.h" // [nfs2se 0045]
+#include "../util/util_string.h" // [nfs2se 0045]
 
 namespace dxvk {
 
@@ -138,6 +140,32 @@ namespace dxvk {
 
     if (!useRayReconstruction()) {
       return;
+    }
+
+    // [nfs2se 0045] diagnostics: reset the history every frame / force the disocclusion mask on every pixel
+    if (nfs2seResetEveryFrame()) {
+      resetHistory = true;
+    }
+    if (nfs2seForceDisocclusion() > 0.0f) {
+      VkClearColorValue forceValue = {};
+      forceValue.float32[0] = nfs2seForceDisocclusion();
+      VkImageSubresourceRange forceRange = {};
+      forceRange.layerCount = 1;
+      forceRange.levelCount = 1;
+      forceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      ctx->clearColorImage(rtOutput.m_primaryDisocclusionThresholdMix.image, forceValue, forceRange);
+      static bool sForceSaid = false;
+      if (!sForceSaid) {
+        sForceSaid = true;
+        Logger::info(str::format("[nfs2se rrdiag] primary disocclusion mask forced to ", nfs2seForceDisocclusion(), " on every pixel before DLSS-RR"));
+      }
+    }
+    if (nfs2seResetEveryFrame()) {
+      static bool sResetSaid = false;
+      if (!sResetSaid) {
+        sResetSaid = true;
+        Logger::info("[nfs2se rrdiag] DLSS-RR history reset every frame");
+      }
     }
 
     bool dlssAutoExposure = true;

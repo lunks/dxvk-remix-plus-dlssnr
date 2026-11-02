@@ -89,6 +89,10 @@ namespace dxvk {
                     args.environment = "RTX_RAY_RECONSTRUCTION_MODEL",
                     args.flags = RtxOptionFlags::UserSetting);
     // [nfs2se 0039] DLSS-RR gets pInAnimatedTextureMask: 1 on the pixels whose material changed this frame (an animated texture's next step). Default True; False passes nullptr (the A/B inside one DLL).
+    // [nfs2se 0045] DIAGNOSTIC (research/image-stability-capi.md 25): nfs2seResetEveryFrame = True hands DLSS-RR reset = true every frame (its history is discarded every frame: the no-smear reference of the pool-lag
+    // measurement); nfs2seForceDisocclusion > 0 overwrites the primary disocclusion input with that value on EVERY pixel before RR reads it (10000 = "discard history everywhere": decides whether the model in use reads the mask).
+    RTX_OPTION("rtx.rayreconstruction", bool, nfs2seResetEveryFrame, false, "DIAGNOSTIC: reset DLSS-RR's temporal history every frame.");
+    RTX_OPTION("rtx.rayreconstruction", float, nfs2seForceDisocclusion, 0.0f, "DIAGNOSTIC: > 0 writes this value into the primary disocclusion mask of every pixel before DLSS-RR reads it (10000 = discard history).");
     RTX_OPTION("rtx.rayreconstruction", bool, enableAnimatedTextureMask, true, "Pass the animated-texture mask (pixels whose material changed this frame) to DLSS-RR so it down-weights their history.");
     // [nfs2se 0040] The specular hit distance DLSS-RR gets for a glossy primary surface whose sampled indirect lobe was DIFFUSE (the common case on dielectric paint): the distance along the mirror direction.
     RTX_OPTION("rtx.rayreconstruction", bool, writeReflectionHitDistance, true, "Write the specular hit distance for every glossy primary surface (perceptual roughness up to reflectionHitDistanceMaxRoughness), not only where the first sampled indirect lobe was specular: one mirror-direction ray per glossy pixel whose lobe was diffuse. DLSS-RR only.");
