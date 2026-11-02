@@ -44,6 +44,11 @@
 #include "rtx_shader_manager.h"
 #include "rtx_ray_reconstruction.h"
 #include "rtx_restir_gi_rayquery.h"
+#include "rtx_light_manager.h" // [nfs2se 0048]
+#include "../util/log/log.h" // [nfs2se 0048]
+#include "../util/util_string.h" // [nfs2se 0048]
+#include <algorithm> // [nfs2se 0048]
+#include <cmath> // [nfs2se 0048]
 
 namespace dxvk {
 
@@ -70,9 +75,11 @@ namespace dxvk {
         TEXTURE2D(RAY_RECONSTRUCTION_NORMALS_DLSSRR_INPUT)
         TEXTURE2D(RAY_RECONSTRUCTION_DEPTHS_INPUT)
         TEXTURE2D(RAY_RECONSTRUCTION_MOTION_VECTOR_INPUT)
+        TEXTURE2D(RAY_RECONSTRUCTION_WORLD_POSITION_INPUT)
 
         RW_TEXTURE2D(RAY_RECONSTRUCTION_PRIMARY_ALBEDO_INPUT_OUTPUT)
         RW_TEXTURE2D(RAY_RECONSTRUCTION_PRIMARY_SPECULAR_ALBEDO_INPUT_OUTPUT)
+        RW_TEXTURE2D(RAY_RECONSTRUCTION_FOOTPRINT_MASK_INPUT_OUTPUT)
 
         RW_TEXTURE2D(RAY_RECONSTRUCTION_DEBUG_VIEW_OUTPUT)
         RW_TEXTURE2D(RAY_RECONSTRUCTION_PRIMARY_DISOCCLUSION_MASK_OUTPUT)
@@ -182,6 +189,36 @@ namespace dxvk {
       constants.rcpSquaredDisocclusionMaskBlurGaussianWeightSigma = 1.0f / (disocclusionMaskBlurNormalizedGaussianWeightSigma() * disocclusionMaskBlurNormalizedGaussianWeightSigma());
       constants.enableReSTIRGI = RtxOptions::useReSTIRGI();
 
+      // [nfs2se 0048] the headlamp footprint: the lit car lamps' cones for the prepare pass, which raises the primary disocclusion mask where they light the surface
+      if (headlampFootprintStrength() > 1.0f) {
+        if (enableDisocclusionMaskBlur()) {
+          static bool sBlurSaid = false;
+          if (!sBlurSaid) {
+            sBlurSaid = true;
+            Logger::warn("[nfs2se rrfoot] headlampFootprintStrength is set but enableDisocclusionMaskBlur is True: the footprint needs the blur off and is NOT applied");
+          }
+        } else {
+          std::vector<LightManager::HeadlampInfo> lamps;
+          sceneManager.getLightManager().collectHeadlamps(lamps);
+          const uint32_t count = uint32_t(std::min<size_t>(lamps.size(), RAY_RECONSTRUCTION_MAX_HEADLAMPS));
+          constants.headlampCount = count;
+          constants.headlampLogStrength = std::log(std::min(headlampFootprintStrength(), 60000.0f));
+          constants.headlampMinIrradiance = std::max(headlampFootprintMinIrradiance(), 1e-6f);
+          for (uint32_t i = 0; i < count; ++i) {
+            const LightManager::HeadlampInfo& lamp = lamps[i];
+            constants.headlampPositionRadius[i] = vec4(lamp.position.x, lamp.position.y, lamp.position.z, lamp.radius);
+            constants.headlampAxisCosCone[i] = vec4(lamp.axis.x, lamp.axis.y, lamp.axis.z, lamp.cosCone);
+            constants.headlampSoftnessFocusLuminance[i] = vec4(lamp.softness, lamp.focus, lamp.luminance, 0.0f);
+          }
+          static uint32_t sLastCount = ~0u;
+          if (count != sLastCount) {
+            sLastCount = count;
+            Logger::info(str::format("[nfs2se rrfoot] headlamp footprint: ", count, " lamp(s), strength ", headlampFootprintStrength(), ", min irradiance ", headlampFootprintMinIrradiance(),
+                                     count ? str::format(", first lamp radius ", lamps[0].radius, " cos(cone) ", lamps[0].cosCone, " softness ", lamps[0].softness, " luminance ", lamps[0].luminance) : std::string()));
+          }
+        }
+      }
+
       ctx->updateBuffer(m_constants, 0, sizeof(constants), &constants);
       ctx->getCommandList()->trackResource<DxvkAccess::Read>(m_constants);
 
@@ -207,12 +244,14 @@ namespace dxvk {
       ctx->bindResourceView(RAY_RECONSTRUCTION_NORMALS_DLSSRR_INPUT, rtOutput.m_primaryWorldShadingNormalDLSSRR.view(Resources::AccessType::Read), nullptr);
       ctx->bindResourceView(RAY_RECONSTRUCTION_DEPTHS_INPUT, depthInput->view, nullptr);
       ctx->bindResourceView(RAY_RECONSTRUCTION_MOTION_VECTOR_INPUT, motionVectorInput->view, nullptr);
+      ctx->bindResourceView(RAY_RECONSTRUCTION_WORLD_POSITION_INPUT, rtOutput.getCurrentPrimaryWorldPositionWorldTriangleNormal().view(Resources::AccessType::Read), nullptr); // [nfs2se 0048]
 
       // Inputs/Outputs
 
       ctx->bindResourceView(RAY_RECONSTRUCTION_PRIMARY_ALBEDO_INPUT_OUTPUT, rtOutput.m_primaryAlbedo.view, nullptr);
       ctx->bindResourceView(RAY_RECONSTRUCTION_PRIMARY_SPECULAR_ALBEDO_INPUT_OUTPUT,
         rtOutput.m_primarySpecularAlbedo.view(Resources::AccessType::ReadWrite), nullptr);
+      ctx->bindResourceView(RAY_RECONSTRUCTION_FOOTPRINT_MASK_INPUT_OUTPUT, rtOutput.m_primaryDisocclusionThresholdMix.view, nullptr); // [nfs2se 0048]
 
       // Outputs
 
@@ -248,6 +287,7 @@ namespace dxvk {
         rtOutput.m_rayReconstructionHitDistance.view(Resources::AccessType::Read)
       };
       pInputs.push_back(rtOutput.m_primaryAnimatedTextureMask.view); // [nfs2se 0039]
+      pInputs.push_back(rtOutput.m_primaryDisocclusionThresholdMix.view); // [nfs2se 0048] written by the prepare pass above (the headlamp footprint)
 
       const DxvkAutoExposure& autoExposure = device()->getCommon()->metaAutoExposure();
       if (!mAutoExposure) {

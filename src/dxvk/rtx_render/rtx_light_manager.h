@@ -145,6 +145,20 @@ public:
   
   uint getLightCount(uint type);
 
+  // [nfs2se 0048] The car lamps lit this frame: the API lights whose handle (= the info hash) carries "LAMP" (0x4C414D50) in its upper 32 bits (tools/emitter/common_car_lamps.h kLampHandleTag),
+  // sphere lights with a cone, radiance above 0.  Sorted by handle (car ordinal, lamp index).  Called from the CS thread, where the light lists are owned.
+  struct HeadlampInfo {
+    Vector3 position;
+    float radius;
+    Vector3 axis;
+    float cosCone;
+    float softness;
+    float focus;
+    float luminance;
+    uint64_t handle;
+  };
+  void collectHeadlamps(std::vector<HeadlampInfo>& out) const;
+
 
 private:
   std::unordered_map<XXH64_hash_t, RtLight> m_lights;

@@ -20,6 +20,7 @@
 * DEALINGS IN THE SOFTWARE.
 */
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <cassert>
 
@@ -733,6 +734,37 @@ namespace dxvk {
       // New light - copy it and set initial frame
       fork_hooks::setExternalLightEmplace(*this, handle, rtlight);
     }
+  }
+
+  // [nfs2se 0048]
+  void LightManager::collectHeadlamps(std::vector<HeadlampInfo>& out) const {
+    out.clear();
+    constexpr uint64_t kLampHandleTag = 0x4C414D50ull;
+    // Note: m_externalActiveLightList is cleared at the end of prepareSceneData (before DLSS-RR runs), so the table of every created external light is read; a destroyed light is erased from it.
+    for (const auto& entry : m_externalLights) {
+      const uint64_t key = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(entry.first));
+      if ((key >> 32) != kLampHandleTag || entry.second.getType() != RtLightType::Sphere) {
+        continue;
+      }
+      const RtSphereLight& sphere = entry.second.getSphereLight();
+      const RtLightShaping& shaping = sphere.getShaping();
+      const Vector3 radiance = sphere.getRadiance();
+      const float luminance = 0.2126f * radiance.x + 0.7152f * radiance.y + 0.0722f * radiance.z;
+      if (!shaping.getEnabled() || !(luminance > 0.0f)) {
+        continue;
+      }
+      HeadlampInfo info;
+      info.position = sphere.getPosition();
+      info.radius = sphere.getRadius();
+      info.axis = shaping.getDirection();
+      info.cosCone = shaping.getCosConeAngle();
+      info.softness = shaping.getConeSoftness();
+      info.focus = shaping.getFocusExponent();
+      info.luminance = luminance;
+      info.handle = key;
+      out.push_back(info);
+    }
+    std::sort(out.begin(), out.end(), [](const HeadlampInfo& a, const HeadlampInfo& b) { return a.handle < b.handle; });
   }
 
   void LightManager::removeExternalLight(remixapi_LightHandle handle) {

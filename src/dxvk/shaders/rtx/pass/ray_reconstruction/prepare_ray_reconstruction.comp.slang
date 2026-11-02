@@ -70,6 +70,10 @@ Texture2D<float> PrimaryConeRadius;
 layout(r16f, binding = RAY_RECONSTRUCTION_PRIMARY_DISOCCLUSION_MASK_INPUT)
 Texture2D<float> DisocclusionMask;
 
+// [nfs2se 0048]
+layout(binding = RAY_RECONSTRUCTION_WORLD_POSITION_INPUT)
+Texture2D<float4> InWorldPosition;
+
 // Input/Outputs
 layout(binding = RAY_RECONSTRUCTION_PRIMARY_ALBEDO_INPUT_OUTPUT)
 RWTexture2D<float4> PrimaryAlbedo;
@@ -77,11 +81,67 @@ RWTexture2D<float4> PrimaryAlbedo;
 layout(rgb10_a2, binding = RAY_RECONSTRUCTION_PRIMARY_SPECULAR_ALBEDO_INPUT_OUTPUT)
 RWTexture2D<float4> PrimarySpecularAlbedo;
 
+// [nfs2se 0048] the primary disocclusion mask itself (the gbuffer's image; read by RR after this pass when the blur is off)
+layout(r16f, binding = RAY_RECONSTRUCTION_FOOTPRINT_MASK_INPUT_OUTPUT)
+RWTexture2D<float> FootprintMask;
+
 layout(binding = RAY_RECONSTRUCTION_DEBUG_VIEW_OUTPUT)
 RWTexture2D<float4> DebugView;
 
 layout(r16f, binding = RAY_RECONSTRUCTION_PRIMARY_DISOCCLUSION_MASK_OUTPUT)
 RWTexture2D<float> DisocclusionMaskOutput;
+
+// [nfs2se 0048] How much of the headlamp footprint a world position is in, 0..1 (research/image-stability-capi.md 28).  Per lamp: the cone's own shaping (Remix's lightShapingCalcRadialFalloff:
+// smoothstep over the softness, focus mix) times the lamp's irradiance on a surface square to the beam, luminance x pi r^2 / d^2 (the road's own cosine is left out: it is the normal-mapped
+// asphalt's noise, not the beam's reach).  The share is a log ramp: 0 below half the threshold, 1 at twice it.  The nearest-to-full lamp wins.
+float headlampFootprint(float3 position)
+{
+  if (any(isnan(position)) || any(isinf(position)))
+  {
+    return 0.0;
+  }
+  float best = 0.0;
+  for (uint i = 0; i < cb.headlampCount; ++i)
+  {
+    const float4 positionRadius = cb.headlampPositionRadius[i];
+    const float4 axisCosCone = cb.headlampAxisCosCone[i];
+    const float4 softnessFocusLuminance = cb.headlampSoftnessFocusLuminance[i];
+    const float3 toSurface = position - positionRadius.xyz;
+    const float distanceSquared = dot(toSurface, toSurface);
+    if (distanceSquared < 1e-6)
+    {
+      continue;
+    }
+    const float cosTheta = dot(normalize(axisCosCone.xyz), toSurface * rsqrt(distanceSquared));
+    if (cosTheta < axisCosCone.w)
+    {
+      continue;
+    }
+    const float softened = smoothstep(axisCosCone.w, axisCosCone.w + softnessFocusLuminance.x, cosTheta);
+    const float shaping = softnessFocusLuminance.y <= 0.0 ? softened : lerp(softened, 1.0, pow(cosTheta, softnessFocusLuminance.y) * softened);
+    const float radius = positionRadius.w;
+    const float irradiance = softnessFocusLuminance.z * 3.14159265 * radius * radius * shaping / max(distanceSquared, radius * radius);
+    if (irradiance > 0.0)
+    {
+      best = max(best, saturate((log2(irradiance / cb.headlampMinIrradiance) + 1.0) * 0.5));
+    }
+  }
+  return best;
+}
+
+void applyHeadlampFootprint(uint2 pixelCoordinate)
+{
+  if (cb.headlampCount == 0)
+  {
+    return;
+  }
+  const float share = headlampFootprint(InWorldPosition[pixelCoordinate].xyz);
+  if (share > 0.01)
+  {
+    // the value is RR's history-discard strength (10000 = the gbuffer's own "discard"): interpolated in the log, so the footprint's edge fades
+    FootprintMask[pixelCoordinate] = max(FootprintMask[pixelCoordinate], exp(share * cb.headlampLogStrength));
+  }
+}
 
 float getRoughnessFactor(float roughness)
 {
@@ -179,6 +239,12 @@ void writeDebugViewOutputs(uint2 pixelCoordinate)
     if (cb.enableDisocclusionMaskBlur)
     {
       storeInDebugView(pixelCoordinate, DisocclusionMaskOutput[pixelCoordinate]);
+    }
+    else if (cb.headlampCount > 0)
+    {
+      // [nfs2se 0048] the mask as a share of the footprint strength (0 .. 1; the gbuffer's own 10000 reads above 1)
+      const float mask = FootprintMask[pixelCoordinate];
+      storeInDebugView(pixelCoordinate, mask > 1.0 ? log(mask) / max(cb.headlampLogStrength, 1e-3) : 0.0);
     }
     else
     {
@@ -290,6 +356,7 @@ void main(uint2 threadId : SV_DispatchThreadID)
 
   uvec2 pixelCoordinate = threadId;
 
+  applyHeadlampFootprint(pixelCoordinate); // [nfs2se 0048]
   preprocessInputsForRR(pixelCoordinate);
 
   writeDebugViewOutputs(pixelCoordinate);

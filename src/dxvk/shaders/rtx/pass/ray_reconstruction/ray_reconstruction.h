@@ -46,10 +46,13 @@
 #define RAY_RECONSTRUCTION_NORMALS_DLSSRR_INPUT               22
 #define RAY_RECONSTRUCTION_DEPTHS_INPUT                       23
 #define RAY_RECONSTRUCTION_MOTION_VECTOR_INPUT                24
+#define RAY_RECONSTRUCTION_WORLD_POSITION_INPUT               25 // [nfs2se 0048]
 
 // Input/Outputs
 #define RAY_RECONSTRUCTION_PRIMARY_ALBEDO_INPUT_OUTPUT          40
 #define RAY_RECONSTRUCTION_PRIMARY_SPECULAR_ALBEDO_INPUT_OUTPUT 41
+#define RAY_RECONSTRUCTION_FOOTPRINT_MASK_INPUT_OUTPUT          42 // [nfs2se 0048] the primary disocclusion mask, written in place
+#define RAY_RECONSTRUCTION_MAX_HEADLAMPS                        8  // [nfs2se 0048]
 
 // Outputs
 #define RAY_RECONSTRUCTION_DEBUG_VIEW_OUTPUT                    52
@@ -75,4 +78,13 @@ struct RayReconstructionArgs {
   uint disocclusionMaskBlurRadius;
   uint enableReSTIRGI;
   uint pad0;
+
+  // [nfs2se 0048] the headlamp footprint: up to RAY_RECONSTRUCTION_MAX_HEADLAMPS cone lights (research/image-stability-capi.md 28)
+  uint headlampCount;
+  float headlampLogStrength;     // ln(rtx.rayreconstruction.headlampFootprintStrength)
+  float headlampMinIrradiance;
+  uint pad1;
+  vec4 headlampPositionRadius[RAY_RECONSTRUCTION_MAX_HEADLAMPS];
+  vec4 headlampAxisCosCone[RAY_RECONSTRUCTION_MAX_HEADLAMPS];
+  vec4 headlampSoftnessFocusLuminance[RAY_RECONSTRUCTION_MAX_HEADLAMPS];
 };

@@ -100,6 +100,11 @@ namespace dxvk {
                "Normalized Gaussian weight sigma to use for blurring disocclusion mask.\n"
                "The sigma is applied to the normalized blur kernel radius extents (i.e. <0, 1>).")
     RTX_OPTION("rtx.rayreconstruction", bool, enableTransformerModelD, false, "");
+    // [nfs2se 0048] The headlamp footprint (research/image-stability-capi.md 28): surfaces the car lamps light (the API lights whose handle carries "LAMP" in its upper 32 bits) get DLSS-RR's
+    // history pulled down, per pixel: the primary disocclusion mask is raised to this value (10000 = the gbuffer's own "discard history", the full reset), fading out at the cone's and the reach's edge.
+    // A car-fixed light pool moves against the road it lights, and RR's history smears it (softer, dimmer, less grain); the higher the value, the more it reads the raw 1-3 samples (sharper, grainier).
+    RTX_OPTION("rtx.rayreconstruction", float, headlampFootprintStrength, 0.0f, "Headlamp footprint: the disocclusion value (log-interpolated) given to surfaces lit by the car lamps; <= 1 = off, 10000 = full history reset. Needs enableDisocclusionMaskBlur = False.");
+    RTX_OPTION("rtx.rayreconstruction", float, headlampFootprintMinIrradiance, 0.5f, "Headlamp footprint reach: a lamp's irradiance on a surface square to its beam, luminance x pi r^2 x cone shaping / d^2 (radiance units of the lamp); the footprint fades from 0 at half this to full at twice it.");
 
   private:
     void initializeRayReconstruction(Rc<DxvkContext> pRenderContext);
