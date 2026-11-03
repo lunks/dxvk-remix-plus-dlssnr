@@ -1,0 +1,33 @@
+/*
+* [nfs2se 0050] The car-lamp cone test, shared by the DLSS-RR headlamp footprint (0048, prepare_ray_reconstruction.comp.slang) and the RTXDI lamp-cone candidate boost
+* (0050, rtxdi_lamp_cone.slangh).  Moved out of 0048's shader unchanged (research/image-stability-capi.md 28, 31).
+*/
+#pragma once
+
+// A lamp's irradiance on a world position, 0 outside its cone.  The cone's own shaping (Remix's lightShapingCalcRadialFalloff: smoothstep over the softness, focus mix) times the lamp's
+// irradiance on a surface square to the beam, luminance x pi r^2 / d^2 (the road's own cosine is left out: it is the normal-mapped asphalt's noise, not the beam's reach).
+// positionRadius = (lamp position, sphere radius), axisCosCone = (cone axis, cos(cone angle)), softnessFocusLuminance = (cone softness, focus exponent, luminance, unused).
+float headlampConeIrradiance(float3 position, float4 positionRadius, float4 axisCosCone, float4 softnessFocusLuminance)
+{
+  const float3 toSurface = position - positionRadius.xyz;
+  const float distanceSquared = dot(toSurface, toSurface);
+  if (distanceSquared < 1e-6)
+  {
+    return 0.0;
+  }
+  const float cosTheta = dot(normalize(axisCosCone.xyz), toSurface * rsqrt(distanceSquared));
+  if (cosTheta < axisCosCone.w)
+  {
+    return 0.0;
+  }
+  const float softened = smoothstep(axisCosCone.w, axisCosCone.w + softnessFocusLuminance.x, cosTheta);
+  const float shaping = softnessFocusLuminance.y <= 0.0 ? softened : lerp(softened, 1.0, pow(cosTheta, softnessFocusLuminance.y) * softened);
+  const float radius = positionRadius.w;
+  return softnessFocusLuminance.z * 3.14159265 * radius * radius * shaping / max(distanceSquared, radius * radius);
+}
+
+// The share of the footprint an irradiance is in, 0..1: a log ramp, 0 below half the threshold, 1 at twice it.
+float headlampReachShare(float irradiance, float minIrradiance)
+{
+  return irradiance > 0.0 ? saturate((log2(irradiance / minIrradiance) + 1.0) * 0.5) : 0.0;
+}

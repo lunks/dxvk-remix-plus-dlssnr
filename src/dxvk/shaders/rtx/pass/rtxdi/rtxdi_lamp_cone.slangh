@@ -1,0 +1,26 @@
+/*
+* [nfs2se 0050] RTXDI lamp-cone candidate boost (research/image-stability-capi.md 31): how much of the car lamps' footprint (the 0048 cone test, rtx/utility/headlamp_cone.slangh) a surface is in.
+* Initial sampling and temporal reuse must call this with the same position so that the RNG skip matches the sample count.
+*/
+#pragma once
+
+#include "rtx/utility/headlamp_cone.slangh"
+
+// 0 outside every lit lamp's cone or when the option is off (cb.rtxdiLampConeCount == 0); 1 deep inside; the nearest-to-full lamp wins.
+float rtxdiLampConeShare(float3 position)
+{
+  if (cb.rtxdiLampConeCount == 0 || any(isnan(position)) || any(isinf(position)))
+  {
+    return 0.0;
+  }
+  float best = 0.0;
+  for (uint i = 0; i < cb.rtxdiLampConeCount; ++i)
+  {
+    const uint o = i * RTXDI_LAMP_CONE_STRIDE;
+    const float4 positionRadius = float4(cb.rtxdiLampCone[o + 0], cb.rtxdiLampCone[o + 1], cb.rtxdiLampCone[o + 2], cb.rtxdiLampCone[o + 3]);
+    const float4 axisCosCone = float4(cb.rtxdiLampCone[o + 4], cb.rtxdiLampCone[o + 5], cb.rtxdiLampCone[o + 6], cb.rtxdiLampCone[o + 7]);
+    const float4 softnessFocusLuminance = float4(cb.rtxdiLampCone[o + 8], cb.rtxdiLampCone[o + 9], cb.rtxdiLampCone[o + 10], 0.0);
+    best = max(best, headlampReachShare(headlampConeIrradiance(position, positionRadius, axisCosCone, softnessFocusLuminance), cb.rtxdiLampConeMinIrradiance));
+  }
+  return best;
+}

@@ -141,7 +141,9 @@ public:
   void unregisterPersistentExternalLight(remixapi_LightHandle handle);
   void queueAutoInstancePersistent();
 
-  void setRaytraceArgs(RaytraceArgs& raytraceArgs, uint32_t rtxdiInitialLightSamples, uint32_t volumeRISInitialLightSamples, uint32_t risLightSamples) const;
+  // [nfs2se 0050] rtxdiLampConeLightSamples (0 = off): the RTXDI initial candidate count inside the car lamps' cones (research/image-stability-capi.md 31); lampConeMinIrradiance: the reach of the cones.
+  void setRaytraceArgs(RaytraceArgs& raytraceArgs, uint32_t rtxdiInitialLightSamples, uint32_t volumeRISInitialLightSamples, uint32_t risLightSamples,
+                       uint32_t rtxdiLampConeLightSamples, float lampConeMinIrradiance) const;
   
   uint getLightCount(uint type);
 

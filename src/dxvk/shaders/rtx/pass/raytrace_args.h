@@ -47,8 +47,13 @@ struct LightRangeInfo {
   uint16_t rtxdiSampleCount;
   uint16_t volumeRISSampleCount;
   uint16_t risSampleCount;
-  uint16_t pad;
+  uint16_t rtxdiLampSampleCount; // [nfs2se 0050] rtxdiSampleCount inside the car lamps' cones (== rtxdiSampleCount when the boost is off); was pad
 };
+
+// [nfs2se 0050] The car lamps' cones for the RTXDI candidate boost (research/image-stability-capi.md 31): RTXDI_LAMP_CONE_MAX lamps of RTXDI_LAMP_CONE_STRIDE floats each
+// (position xyz, radius, axis xyz, cos(cone), softness, focus, luminance, unused), in RaytraceArgs::rtxdiLampCone.
+#define RTXDI_LAMP_CONE_MAX 8
+#define RTXDI_LAMP_CONE_STRIDE 12
 
 // Note: ensure 16B alignment
 struct TerrainArgs {
@@ -446,6 +451,12 @@ struct RaytraceArgs {
   uint raytracedRenderTargetOpaqueScreen;
 
   uint enableRtxdiBestLightJitter;
+
+  // [nfs2se 0050] RTXDI lamp-cone candidate boost: the lit car lamps (0 = off), the reach (the irradiance threshold of the footprint share) and the lamps' cones.
+  // Plain scalars at the END of the struct: the C++ / shader padding rules for vec4 do not apply.
+  uint rtxdiLampConeCount;
+  float rtxdiLampConeMinIrradiance;
+  float rtxdiLampCone[RTXDI_LAMP_CONE_MAX * RTXDI_LAMP_CONE_STRIDE];
 
   // NOTE: Add structs to the top section of RaytraceArgs, not the bottom.
   // NOTE: bool does not work in debug builds, use uint instead.

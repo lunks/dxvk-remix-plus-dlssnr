@@ -50,6 +50,7 @@
 #include "rtx/algorithm/resolve.slangh"
 #include "rtx/algorithm/rtxdi/rtxdi.slangh"
 #include "rtx/pass/rtxdi/rtxdi_best_light.slangh"
+#include "rtx/pass/rtxdi/rtxdi_lamp_cone.slangh" // [nfs2se 0050]
 #include "rtx/pass/sparse_rendering/compact_active_pixels.slangh"
 
 // Cheap reprojection for inactive sparse rendering pixels.
@@ -144,7 +145,7 @@ void main(int2 threadIndex : SV_DispatchThreadID)
   RTXDI_Reservoir state = RAB_LoadReservoir(pixelCoordinate, RTXDI_GetTemporalOutputPage());
   if (cb.lightCount != 0)
   {
-    RTXDI_SkipRandomLightsRng(rng);
+    RTXDI_SkipRandomLightsRng(rng, rtxdiLampConeShare(RAB_GetSurfaceWorldPos(surface))); // [nfs2se 0050] the initial pass drew more candidates in the lamp cones
     RTXDI_SkipSingleLightRng(rng, previousBestLightIndex);
     RAB_SkipRandoms(rng, 1);
   }

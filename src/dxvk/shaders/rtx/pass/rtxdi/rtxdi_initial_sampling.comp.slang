@@ -49,6 +49,7 @@
 #include "rtx/algorithm/resolve.slangh"
 #include "rtx/algorithm/rtxdi/rtxdi.slangh"
 #include "rtx/pass/rtxdi/rtxdi_best_light.slangh"
+#include "rtx/pass/rtxdi/rtxdi_lamp_cone.slangh" // [nfs2se 0050]
 #include "rtx/pass/sparse_rendering/compact_active_pixels.slangh"
 
 [shader("compute")]
@@ -89,8 +90,10 @@ void main(int2 threadIndex : SV_DispatchThreadID)
   RTXDI_Reservoir state = RTXDI_EmptyReservoir();
   if (cb.lightCount != 0)
   {
+    // [nfs2se 0050] more candidates where the car lamps light the surface
+    const float lampShare = rtxdiLampConeShare(RAB_GetSurfaceWorldPos(surface));
     RTXDI_SampleRandomLights(state, rng, surface, previousBestLightIndex, previousBestLightPortalIdx,
-      cb.enableRtxdiInitialVisibility && !RTXDI_DEFER_INITIAL_VISIBILITY);
+      cb.enableRtxdiInitialVisibility && !RTXDI_DEFER_INITIAL_VISIBILITY, lampShare);
 
     RTXDI_Reservoir bestLightReservoir = RTXDI_SampleSingleLight(rng, surface, previousBestLightIndex, previousBestLightPortalIdx,
       cb.enableRtxdiInitialVisibility && !RTXDI_DEFER_INITIAL_VISIBILITY);

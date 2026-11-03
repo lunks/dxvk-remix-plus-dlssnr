@@ -141,10 +141,18 @@ struct RTXDI_LightRange
   uint firstIndex;
   uint count;
   uint sampleCount;
+  uint lampSampleCount; // [nfs2se 0050] sampleCount inside the car lamps' cones, >= sampleCount
   uint volumeRISSampleCount;
 };
 
-void RTXDI_SkipRandomLightsRng(inout RAB_RandomSamplerState rng)
+// [nfs2se 0050] The candidate count of a range for a pixel with this share (0..1) of the car lamps' footprint: sampleCount outside, lampSampleCount deep inside.
+// Initial sampling and temporal reuse must use the same share, so that the RNG skip matches the sample count.
+uint RTXDI_RangeSampleCount(RTXDI_LightRange range, float lampShare)
+{
+  return uint(int(range.sampleCount) + int(round(lampShare * float(int(range.lampSampleCount) - int(range.sampleCount)))));
+}
+
+void RTXDI_SkipRandomLightsRng(inout RAB_RandomSamplerState rng, float lampShare)
 {
   [unroll]
   for (uint lightType = 0; lightType < RAB_GetLightTypeCount(); ++lightType)
@@ -153,7 +161,7 @@ void RTXDI_SkipRandomLightsRng(inout RAB_RandomSamplerState rng)
     if (range.count == 0)
       continue;
 
-    RAB_SkipRandoms(rng, 2 + range.sampleCount * 4);
+    RAB_SkipRandoms(rng, 2 + RTXDI_RangeSampleCount(range, lampShare) * 4);
   }
 }
 
@@ -171,7 +179,8 @@ void RTXDI_SampleRandomLights(
   RAB_Surface surface,
   uint16_t excludeLightIdx,
   uint8_t excludePortalIdx,
-  bool testVisibility)
+  bool testVisibility,
+  float lampShare)
 {
   // Get importance sampling parameters for portals, assume <= 4 portals
   float totalPortalPdf;
@@ -195,10 +204,11 @@ void RTXDI_SampleRandomLights(
     const float rangeInvSourcePdf = float(range.count);
 
     // Begin strided sampling by selecting a random starting light
+    const uint sampleCount = RTXDI_RangeSampleCount(range, lampShare); // [nfs2se 0050]
     float lightIndex = RAB_GetNextRandom(rng) * range.count;
-    const float stride = max(1.0f, float(range.count) / float(range.sampleCount));
+    const float stride = max(1.0f, float(range.count) / float(sampleCount));
 
-    for (uint i = 0; i < range.sampleCount; i++)
+    for (uint i = 0; i < sampleCount; i++)
     {
       const uint rndLight = uint(lightIndex) + range.firstIndex;
       const float2 lightUV = float2(RAB_GetNextRandom(rng), RAB_GetNextRandom(rng));

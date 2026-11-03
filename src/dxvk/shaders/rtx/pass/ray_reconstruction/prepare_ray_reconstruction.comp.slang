@@ -26,6 +26,7 @@
 #include "rtx/utility/debug_view_helpers.slangh"
 #include "rtx/utility/geometry_flags.slangh"
 #include "rtx/utility/common.slangh"
+#include "rtx/utility/headlamp_cone.slangh" // [nfs2se 0050] the cone test of 0048, shared with the RTXDI lamp-cone boost
 
 // Inputs
 layout(binding = RAY_RECONSTRUCTION_CONSTANTS_INPUT)
@@ -103,28 +104,7 @@ float headlampFootprint(float3 position)
   float best = 0.0;
   for (uint i = 0; i < cb.headlampCount; ++i)
   {
-    const float4 positionRadius = cb.headlampPositionRadius[i];
-    const float4 axisCosCone = cb.headlampAxisCosCone[i];
-    const float4 softnessFocusLuminance = cb.headlampSoftnessFocusLuminance[i];
-    const float3 toSurface = position - positionRadius.xyz;
-    const float distanceSquared = dot(toSurface, toSurface);
-    if (distanceSquared < 1e-6)
-    {
-      continue;
-    }
-    const float cosTheta = dot(normalize(axisCosCone.xyz), toSurface * rsqrt(distanceSquared));
-    if (cosTheta < axisCosCone.w)
-    {
-      continue;
-    }
-    const float softened = smoothstep(axisCosCone.w, axisCosCone.w + softnessFocusLuminance.x, cosTheta);
-    const float shaping = softnessFocusLuminance.y <= 0.0 ? softened : lerp(softened, 1.0, pow(cosTheta, softnessFocusLuminance.y) * softened);
-    const float radius = positionRadius.w;
-    const float irradiance = softnessFocusLuminance.z * 3.14159265 * radius * radius * shaping / max(distanceSquared, radius * radius);
-    if (irradiance > 0.0)
-    {
-      best = max(best, saturate((log2(irradiance / cb.headlampMinIrradiance) + 1.0) * 0.5));
-    }
+    best = max(best, headlampReachShare(headlampConeIrradiance(position, cb.headlampPositionRadius[i], cb.headlampAxisCosCone[i], cb.headlampSoftnessFocusLuminance[i]), cb.headlampMinIrradiance));
   }
   return best;
 }

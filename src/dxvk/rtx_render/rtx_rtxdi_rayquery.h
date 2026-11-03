@@ -70,6 +70,8 @@ namespace dxvk {
     RTX_OPTION("rtx.di", bool, enableDenoiserGradient, true, "Enable gradient calculation, which is used by confidence calculation and GI sample validation.");
     RTX_OPTION_ARGS("rtx.di", uint32_t, initialSampleCount, 4, "The number of lights randomly selected from the global pool to consider when selecting a light with RTXDI.",
                     args.flags = RtxOptionFlags::UserSetting);
+    // [nfs2se 0050] research/image-stability-capi.md 31.  The RR preset overwrites initialSampleCount (3); this one is read on top of it and no preset resets it.
+    RTX_OPTION("rtx.di", uint32_t, lampConeInitialSampleCount, 0, "RTXDI initial candidates per pixel inside the car lamps' cones (the lit API lights whose handle carries LAMP in its upper 32 bits; reach = rtx.rayreconstruction.headlampFootprintMinIrradiance, faded in over a log ramp). 0 = off; a value at or below initialSampleCount changes nothing. Does not touch DLSS-RR history.");
     RTX_OPTION_ARGS("rtx.di", uint32_t, spatialSamples, 2, "The number of spatial reuse samples in converged areas.",
                     args.flags = RtxOptionFlags::UserSetting);
     RTX_OPTION_ARGS("rtx.di", uint32_t, disocclusionSamples, 4, "The number of spatial reuse samples in disocclusion areas.",

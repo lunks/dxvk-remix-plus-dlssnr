@@ -833,7 +833,8 @@ namespace dxvk {
     fork_hooks::queueAutoInstancePersistent(*this);
   }
 
-  void LightManager::setRaytraceArgs(RaytraceArgs& raytraceArgs, uint32_t rtxdiInitialLightSamples, uint32_t volumeRISInitialLightSamples, uint32_t risLightSamples) const
+  void LightManager::setRaytraceArgs(RaytraceArgs& raytraceArgs, uint32_t rtxdiInitialLightSamples, uint32_t volumeRISInitialLightSamples, uint32_t risLightSamples,
+                                     uint32_t rtxdiLampConeLightSamples, float lampConeMinIrradiance) const
   {
     // The algorithm below performs two tasks:
     // 1. Fills raytraceArgs.lightRanges[] with light range offsets and counts;
@@ -851,6 +852,8 @@ namespace dxvk {
     const float rtxdiSamplesPerLight = std::min(1.f, (float)rtxdiInitialLightSamples / std::max(m_currentActiveLightCount, 1u));
     const float volumeRISSamplesPerLight = std::min(1.f, (float)volumeRISInitialLightSamples / std::max(m_currentActiveLightCount, 1u));
     const float risSamplesPerLight = std::min(1.f, (float)risLightSamples / std::max(m_currentActiveLightCount, 1u));
+    // [nfs2se 0050] the same distribution for the candidate count inside the lamp cones; never below the base count
+    const float rtxdiLampSamplesPerLight = std::min(1.f, (float)rtxdiLampConeLightSamples / std::max(m_currentActiveLightCount, 1u));
 
     // Go over all light types and ranges
     for (uint32_t lightType = 0; lightType < lightTypeCount; ++lightType) {
@@ -870,12 +873,44 @@ namespace dxvk {
         ? std::max((uint16_t)1u, (uint16_t) roundf(volumeRISSamplesPerLight * (float) srcRange.count)) : 0u;
       dstRange.risSampleCount = (srcRange.count > 0 && risSamplesPerLight > 0.f)
         ? std::max((uint16_t)1u, (uint16_t) roundf(risSamplesPerLight * (float) srcRange.count)) : 0u;
+      dstRange.rtxdiLampSampleCount = (srcRange.count > 0 && rtxdiLampSamplesPerLight > 0.f)
+        ? std::max(dstRange.rtxdiSampleCount, std::max((uint16_t)1u, (uint16_t) roundf(rtxdiLampSamplesPerLight * (float) srcRange.count))) : dstRange.rtxdiSampleCount;
 
       // Count the total samples - necessary to compute the correct PDF during sampling (not currently used by RTXDI anymore
       // at least due to changing how it does its sampling, still in use in other cases though).
       raytraceArgs.rtxdiTotalSampleCount += dstRange.rtxdiSampleCount;
       raytraceArgs.volumeRISTotalSampleCount += dstRange.volumeRISSampleCount;
       raytraceArgs.risTotalSampleCount += dstRange.risSampleCount;
+    }
+
+    // [nfs2se 0050] the lit car lamps' cones (the 0048 collector) for the RTXDI candidate boost; off = no collection, count 0, the shader's share is 0 and the sample counts are the base ones
+    raytraceArgs.rtxdiLampConeCount = 0;
+    raytraceArgs.rtxdiLampConeMinIrradiance = std::max(lampConeMinIrradiance, 1e-6f);
+    ONCE(Logger::info(str::format("[nfs2se lampcone] rtx.di.lampConeInitialSampleCount ", rtxdiLampConeLightSamples, " (0 = off), rtx.di.initialSampleCount ", rtxdiInitialLightSamples,
+                                  ", reach (rtx.rayreconstruction.headlampFootprintMinIrradiance) ", lampConeMinIrradiance)));
+    if (rtxdiLampConeLightSamples > 0) {
+      std::vector<HeadlampInfo> lamps;
+      collectHeadlamps(lamps);
+      const uint32_t count = uint32_t(std::min<size_t>(lamps.size(), RTXDI_LAMP_CONE_MAX));
+      raytraceArgs.rtxdiLampConeCount = count;
+      for (uint32_t i = 0; i < count; ++i) {
+        const HeadlampInfo& lamp = lamps[i];
+        const float values[RTXDI_LAMP_CONE_STRIDE] = { lamp.position.x, lamp.position.y, lamp.position.z, lamp.radius, lamp.axis.x, lamp.axis.y, lamp.axis.z, lamp.cosCone,
+                                                       lamp.softness, lamp.focus, lamp.luminance, 0.0f };
+        std::copy(values, values + RTXDI_LAMP_CONE_STRIDE, &raytraceArgs.rtxdiLampCone[i * RTXDI_LAMP_CONE_STRIDE]);
+      }
+      static uint32_t sLastCount = ~0u;
+      if (count != sLastCount) {
+        sLastCount = count;
+        std::string ranges;
+        for (uint32_t lightType = 0; lightType < lightTypeCount; ++lightType) {
+          const LightRangeInfo& range = raytraceArgs.lightRanges[lightType];
+          if (range.count > 0) {
+            ranges += str::format(" type ", lightType, ": ", range.count, " light(s), candidates ", range.rtxdiSampleCount, " -> ", range.rtxdiLampSampleCount, " in a cone;");
+          }
+        }
+        Logger::info(str::format("[nfs2se lampcone] ", count, " lamp(s) lit;", ranges));
+      }
     }
   }
 

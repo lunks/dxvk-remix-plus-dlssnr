@@ -1469,7 +1469,9 @@ namespace dxvk {
       constants,
       m_common->metaRtxdiRayQuery().initialSampleCount(),
       RtxGlobalVolumetrics::initialRISSampleCount(),
-      RtxOptions::risLightSampleCount());
+      RtxOptions::risLightSampleCount(),
+      m_common->metaRtxdiRayQuery().lampConeInitialSampleCount(), // [nfs2se 0050]
+      DxvkRayReconstruction::headlampFootprintMinIrradiance());
 
     constants.resolveTransparencyThreshold = RtxOptions::resolveTransparencyThreshold();
     constants.resolveOpaquenessThreshold = RtxOptions::resolveOpaquenessThreshold();

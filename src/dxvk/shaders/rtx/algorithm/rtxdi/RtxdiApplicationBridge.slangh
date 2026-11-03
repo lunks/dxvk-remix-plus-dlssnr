@@ -845,6 +845,7 @@ RTXDI_LightRange RAB_GetLightRange(uint lightType)
   result.firstIndex = range.offset;
   result.count = range.count;
   result.sampleCount = range.rtxdiSampleCount;
+  result.lampSampleCount = range.rtxdiLampSampleCount; // [nfs2se 0050]
   result.volumeRISSampleCount = range.volumeRISSampleCount;
 
   return result;
